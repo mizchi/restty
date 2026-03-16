@@ -229,12 +229,6 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
   };
   let fontHinting = options.fontHinting ?? false;
   let fontHintTarget = resolveFontHintTarget(options.fontHintTarget);
-  const hasCoarsePointer =
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(any-pointer: coarse)").matches;
-  const hasTouchPoints = typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
-  const showOverlayScrollbar = !(hasCoarsePointer || hasTouchPoints);
   const nerdIconScale = Number.isFinite(options.nerdIconScale)
     ? Number(options.nerdIconScale)
     : 1.0;
@@ -310,7 +304,7 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
   const BOLD_BRIGHTEN = 0.18;
   const BOLD_OFFSET = 0.06;
   const FAINT_ALPHA = 0.6;
-  const TARGET_RENDER_FPS = 60;
+  const TARGET_RENDER_FPS = 120;
   const BACKGROUND_RENDER_FPS = 15;
   const GLYPH_SHAPE_CACHE_LIMIT = 12000;
   const FONT_PICK_CACHE_LIMIT = 16000;
@@ -457,7 +451,6 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     touchSelectionMode,
     touchSelectionLongPressMs,
     touchSelectionMoveThresholdPx,
-    showOverlayScrollbar,
     imeInput,
     cleanupCanvasFns,
     getCanvas: () => canvas,
@@ -486,7 +479,7 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     positionToPixel,
     clearSelection,
     updateImePosition,
-    appendOverlayScrollbar,
+    syncScrollbar,
     bindCanvasEvents: bindCanvasInteractionEvents,
   } = runtimeInteraction;
   const searchRuntime = createRuntimeSearch({
@@ -1145,7 +1138,7 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
       return cursorFallback;
     },
     scrollbarState,
-    appendOverlayScrollbar,
+    syncScrollbar,
     webgpuUniforms,
     ensureInstanceBuffer,
     GLYPH_INSTANCE_FLOATS,

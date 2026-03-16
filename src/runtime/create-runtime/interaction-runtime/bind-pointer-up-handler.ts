@@ -3,7 +3,6 @@ import type {
   RuntimeCell,
   RuntimeDesktopSelectionState,
   RuntimeLinkState,
-  RuntimeScrollbarDragState,
   RuntimeSelectionState,
   RuntimeTouchSelectionState,
 } from "./types";
@@ -12,7 +11,6 @@ type CreatePointerUpHandlerOptions = {
   inputHandler: InputHandler;
   sendKeyInput: (text: string) => void;
   openLink: (url: string) => void;
-  scrollbarDragState: RuntimeScrollbarDragState;
   isTouchPointer: (event: PointerEvent) => boolean;
   touchSelectionState: RuntimeTouchSelectionState;
   selectionState: RuntimeSelectionState;
@@ -34,7 +32,6 @@ export function createPointerUpHandler(options: CreatePointerUpHandlerOptions) {
     inputHandler,
     sendKeyInput,
     openLink,
-    scrollbarDragState,
     isTouchPointer,
     touchSelectionState,
     selectionState,
@@ -52,11 +49,6 @@ export function createPointerUpHandler(options: CreatePointerUpHandlerOptions) {
   } = options;
 
   return (event: PointerEvent) => {
-    if (scrollbarDragState.pointerId === event.pointerId) {
-      scrollbarDragState.pointerId = null;
-      event.preventDefault();
-      return;
-    }
     if (isTouchPointer(event)) {
       if (touchSelectionState.pendingPointerId === event.pointerId) {
         clearPendingTouchSelection();

@@ -36,7 +36,7 @@ export function drawWebGPUFrame(params: DrawWebGPUFrameParams) {
     cursorFallback,
     clamp,
     scrollbarState,
-    appendOverlayScrollbar,
+    syncScrollbar,
     webgpuUniforms,
     ensureInstanceBuffer,
     GLYPH_INSTANCE_FLOATS,
@@ -144,7 +144,7 @@ export function drawWebGPUFrame(params: DrawWebGPUFrameParams) {
       scrollbarState.lastOffset = offset;
       scrollbarState.lastLen = len;
     }
-    appendOverlayScrollbar(frame.overlayData, total, offset, len);
+    syncScrollbar(total, offset, len);
   }
 
   webgpuUniforms[0] = canvas.width;

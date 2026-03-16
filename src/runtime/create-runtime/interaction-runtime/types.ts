@@ -51,11 +51,6 @@ export type RuntimeScrollbarState = {
   lastLen: number;
 };
 
-export type RuntimeScrollbarDragState = {
-  pointerId: number | null;
-  thumbGrabRatio: number;
-};
-
 export type RuntimeSelectionState = ReturnType<typeof createSelectionState>;
 
 export type BindCanvasEventsOptions = {
@@ -74,7 +69,6 @@ export type CreateRuntimeInteractionOptions = {
   touchSelectionMode: "off" | "drag" | "long-press";
   touchSelectionLongPressMs: number;
   touchSelectionMoveThresholdPx: number;
-  showOverlayScrollbar: boolean;
   imeInput: HTMLTextAreaElement | null;
   cleanupCanvasFns: Array<() => void>;
   getCanvas: () => HTMLCanvasElement;
@@ -105,11 +99,6 @@ export type RuntimeInteraction = {
     cellW: number,
     cellH: number,
   ) => void;
-  appendOverlayScrollbar: (
-    overlayData: number[],
-    total: number,
-    offset: number,
-    len: number,
-  ) => void;
+  syncScrollbar: (total: number, offset: number, len: number) => void;
   bindCanvasEvents: (bindOptions: BindCanvasEventsOptions) => void;
 };

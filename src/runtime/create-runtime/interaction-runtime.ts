@@ -14,7 +14,6 @@ import type {
   RuntimeImeState,
   RuntimeInteraction,
   RuntimeLinkState,
-  RuntimeScrollbarDragState,
   RuntimeScrollbarState,
   RuntimeTouchSelectionState,
 } from "./interaction-runtime/types";
@@ -34,7 +33,6 @@ export function createRuntimeInteraction(
     touchSelectionMode,
     touchSelectionLongPressMs,
     touchSelectionMoveThresholdPx,
-    showOverlayScrollbar,
     imeInput,
     cleanupCanvasFns,
     getCanvas,
@@ -80,11 +78,6 @@ export function createRuntimeInteraction(
     lastTotal: 0,
     lastOffset: 0,
     lastLen: 0,
-  };
-
-  const scrollbarDragState: RuntimeScrollbarDragState = {
-    pointerId: null,
-    thumbGrabRatio: 0.5,
   };
 
   const imeState: RuntimeImeState = {
@@ -150,12 +143,10 @@ export function createRuntimeInteraction(
   };
 
   const scrollbarRuntime = createScrollbarRuntime({
-    showOverlayScrollbar,
     scrollbarState,
     selectionState,
     linkState,
     getCanvas,
-    getCurrentDpr,
     getGridState,
     getWasmReady,
     getWasm,
@@ -164,6 +155,9 @@ export function createRuntimeInteraction(
     updateLinkHover: () => updateLinkHover(null),
     markNeedsRender,
     markSearchDirty,
+  });
+  cleanupCanvasFns.push(() => {
+    scrollbarRuntime.destroy();
   });
 
   const positionToCell = (event: { clientX: number; clientY: number }) => {
@@ -270,7 +264,6 @@ export function createRuntimeInteraction(
       selectionState,
       touchSelectionState,
       desktopSelectionState,
-      scrollbarDragState,
       linkState,
       cleanupCanvasFns,
       isTouchPointer,
@@ -278,10 +271,7 @@ export function createRuntimeInteraction(
       clearPendingDesktopSelection,
       tryActivatePendingTouchSelection,
       beginSelectionDrag,
-      noteScrollActivity: scrollbarRuntime.noteScrollActivity,
-      getOverlayScrollbarLayout: scrollbarRuntime.getOverlayScrollbarLayout,
-      pointerToCanvasPx: scrollbarRuntime.pointerToCanvasPx,
-      setViewportScrollOffset: scrollbarRuntime.setViewportScrollOffset,
+      scrollViewportByWheel: scrollbarRuntime.scrollViewportByWheel,
       normalizeSelectionCell,
       positionToCell,
       scrollViewportByLines: scrollbarRuntime.scrollViewportByLines,
@@ -319,7 +309,7 @@ export function createRuntimeInteraction(
     positionToPixel,
     clearSelection,
     updateImePosition,
-    appendOverlayScrollbar: scrollbarRuntime.appendOverlayScrollbar,
+    syncScrollbar: scrollbarRuntime.syncScrollbar,
     bindCanvasEvents,
   };
 }

@@ -1,11 +1,5 @@
 import { clamp } from "../../../grid";
-import type { Color } from "../../../renderer";
-import {
-  computeOverlayScrollbarLayout,
-  pushRoundedVerticalBar,
-  resolveOverlayScrollbarAlpha,
-  type OverlayScrollbarLayout,
-} from "../../overlay-scrollbar";
+import { createNativeScrollbarHost } from "../native-scrollbar-host";
 import type {
   RuntimeGridState,
   RuntimeLinkState,
@@ -15,12 +9,10 @@ import type {
 import type { ResttyWasm, ResttyWasmExports } from "../../../wasm";
 
 export type CreateScrollbarRuntimeOptions = {
-  showOverlayScrollbar: boolean;
   scrollbarState: RuntimeScrollbarState;
   selectionState: RuntimeSelectionState;
   linkState: RuntimeLinkState;
   getCanvas: () => HTMLCanvasElement;
-  getCurrentDpr: () => number;
   getGridState: () => RuntimeGridState;
   getWasmReady: () => boolean;
   getWasm: () => ResttyWasm | null;
@@ -32,27 +24,19 @@ export type CreateScrollbarRuntimeOptions = {
 };
 
 export type ScrollbarRuntime = {
+  destroy: () => void;
   noteScrollActivity: () => void;
   scrollViewportByLines: (lines: number) => void;
-  setViewportScrollOffset: (nextOffset: number) => void;
-  pointerToCanvasPx: (event: PointerEvent) => { x: number; y: number };
-  getOverlayScrollbarLayout: () => OverlayScrollbarLayout | null;
-  appendOverlayScrollbar: (
-    overlayData: number[],
-    total: number,
-    offset: number,
-    len: number,
-  ) => void;
+  scrollViewportByWheel: (event: WheelEvent) => void;
+  syncScrollbar: (total: number, offset: number, len: number) => void;
 };
 
 export function createScrollbarRuntime(options: CreateScrollbarRuntimeOptions): ScrollbarRuntime {
   const {
-    showOverlayScrollbar,
     scrollbarState,
     selectionState,
     linkState,
     getCanvas,
-    getCurrentDpr,
     getGridState,
     getWasmReady,
     getWasm,
@@ -64,6 +48,25 @@ export function createScrollbarRuntime(options: CreateScrollbarRuntimeOptions): 
   } = options;
 
   let scrollRemainder = 0;
+  let pendingPrecisionScrollPx = 0;
+  const hasCoarsePointer =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(any-pointer: coarse)").matches;
+  const hasTouchPoints = typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
+  const nativeScrollHost =
+    !hasCoarsePointer && !hasTouchPoints && typeof document !== "undefined"
+      ? createNativeScrollbarHost({
+          canvas: getCanvas(),
+          getGridState,
+          noteScrollActivity: () => {
+            scrollbarState.lastInputAt = performance.now();
+          },
+          setViewportScrollOffset: (nextOffset) => {
+            setViewportScrollOffset(nextOffset);
+          },
+        })
+      : null;
 
   const getViewportScrollOffset = () => {
     const wasmHandle = getWasmHandle();
@@ -91,6 +94,7 @@ export function createScrollbarRuntime(options: CreateScrollbarRuntimeOptions): 
 
   const noteScrollActivity = () => {
     scrollbarState.lastInputAt = performance.now();
+    nativeScrollHost?.flash();
   };
 
   const scrollViewportByLines = (lines: number) => {
@@ -111,6 +115,41 @@ export function createScrollbarRuntime(options: CreateScrollbarRuntimeOptions): 
     markSearchDirty?.();
     markNeedsRender();
     noteScrollActivity();
+  };
+
+  const scrollViewportByWheel = (event: WheelEvent) => {
+    const { cellH, rows } = getGridState();
+    if (!cellH) return;
+
+    const isPrecision = event.deltaMode === 0;
+    if (isPrecision) {
+      const precisionMultiplier = 2;
+      const adjustedPx = event.deltaY * precisionMultiplier;
+      const pendingPx = pendingPrecisionScrollPx + adjustedPx;
+      if (Math.abs(pendingPx) < cellH) {
+        pendingPrecisionScrollPx = pendingPx;
+        noteScrollActivity();
+        return;
+      }
+
+      const amount = pendingPx / cellH;
+      pendingPrecisionScrollPx = pendingPx - Math.trunc(amount) * cellH;
+      if (amount) {
+        scrollViewportByLines(Math.trunc(amount));
+      }
+      return;
+    }
+
+    pendingPrecisionScrollPx = 0;
+    if (event.deltaMode === 1) {
+      const discreteMultiplier = 3;
+      const yoff = event.deltaY > 0 ? Math.max(event.deltaY, 1) : Math.min(event.deltaY, -1);
+      scrollViewportByLines(yoff * discreteMultiplier);
+      return;
+    }
+
+    const pageLines = rows > 0 ? rows : 24;
+    scrollViewportByLines(event.deltaY * pageLines);
   };
 
   const setViewportScrollOffset = (nextOffset: number) => {
@@ -138,78 +177,15 @@ export function createScrollbarRuntime(options: CreateScrollbarRuntimeOptions): 
     noteScrollActivity();
   };
 
-  const pointerToCanvasPx = (event: PointerEvent) => {
-    const canvas = getCanvas();
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
-    const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
-    return {
-      x: (event.clientX - rect.left) * scaleX,
-      y: (event.clientY - rect.top) * scaleY,
-    };
-  };
-
-  const getOverlayScrollbarLayout = () => {
-    const wasmHandle = getWasmHandle();
-    const wasmExports = getWasmExports();
-    const { rows } = getGridState();
-    if (!showOverlayScrollbar || !wasmExports?.restty_scrollbar_total || !wasmHandle) return null;
-    if (!rows) return null;
-    const total = wasmExports.restty_scrollbar_total(wasmHandle) || 0;
-    const offset = wasmExports.restty_scrollbar_offset
-      ? wasmExports.restty_scrollbar_offset(wasmHandle)
-      : 0;
-    const len = wasmExports.restty_scrollbar_len
-      ? wasmExports.restty_scrollbar_len(wasmHandle)
-      : rows;
-    const canvas = getCanvas();
-    return computeOverlayScrollbarLayout(
-      total,
-      offset,
-      len,
-      canvas.width,
-      canvas.height,
-      getCurrentDpr(),
-    );
-  };
-
-  const appendOverlayScrollbar = (
-    overlayData: number[],
-    total: number,
-    offset: number,
-    len: number,
-  ) => {
-    if (!showOverlayScrollbar) return;
-    const canvas = getCanvas();
-    const layout = computeOverlayScrollbarLayout(
-      total,
-      offset,
-      len,
-      canvas.width,
-      canvas.height,
-      getCurrentDpr(),
-    );
-    if (!layout) return;
-    const alpha = resolveOverlayScrollbarAlpha(performance.now(), scrollbarState.lastInputAt);
-    if (alpha <= 0.01) return;
-
-    const thumbColor: Color = [0.96, 0.96, 0.96, alpha * 0.75];
-    pushRoundedVerticalBar(
-      overlayData,
-      layout.trackX,
-      layout.thumbY,
-      layout.width,
-      layout.thumbH,
-      thumbColor,
-    );
-  };
-
   return {
+    destroy: () => {
+      nativeScrollHost?.destroy();
+    },
     noteScrollActivity,
     scrollViewportByLines,
-    setViewportScrollOffset,
-    pointerToCanvasPx,
-    getOverlayScrollbarLayout,
-    appendOverlayScrollbar,
+    scrollViewportByWheel,
+    syncScrollbar: (total, offset, len) => {
+      nativeScrollHost?.sync(total, offset, len);
+    },
   };
 }

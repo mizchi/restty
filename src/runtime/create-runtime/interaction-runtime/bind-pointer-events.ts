@@ -1,10 +1,3 @@
-import { clamp } from "../../../grid";
-import {
-  isPointInScrollbarHitArea,
-  isPointInScrollbarThumb,
-  scrollbarOffsetForPointerY,
-  type OverlayScrollbarLayout,
-} from "../../overlay-scrollbar";
 import { createPointerAuxHandlers } from "./bind-pointer-aux-handlers";
 import { createPointerUpHandler } from "./bind-pointer-up-handler";
 import type {
@@ -13,7 +6,6 @@ import type {
   RuntimeDesktopSelectionState,
   RuntimeGridState,
   RuntimeLinkState,
-  RuntimeScrollbarDragState,
   RuntimeSelectionState,
   RuntimeTouchSelectionState,
 } from "./types";
@@ -27,7 +19,6 @@ export type BindPointerEventsOptions = {
   selectionState: RuntimeSelectionState;
   touchSelectionState: RuntimeTouchSelectionState;
   desktopSelectionState: RuntimeDesktopSelectionState;
-  scrollbarDragState: RuntimeScrollbarDragState;
   linkState: RuntimeLinkState;
   cleanupCanvasFns: Array<() => void>;
   isTouchPointer: (event: PointerEvent) => boolean;
@@ -35,10 +26,7 @@ export type BindPointerEventsOptions = {
   clearPendingDesktopSelection: () => void;
   tryActivatePendingTouchSelection: (pointerId: number) => boolean;
   beginSelectionDrag: (cell: RuntimeCell, pointerId: number) => void;
-  noteScrollActivity: () => void;
-  getOverlayScrollbarLayout: () => OverlayScrollbarLayout | null;
-  pointerToCanvasPx: (event: PointerEvent) => { x: number; y: number };
-  setViewportScrollOffset: (nextOffset: number) => void;
+  scrollViewportByWheel?: (event: WheelEvent) => void;
   normalizeSelectionCell: (cell: RuntimeCell) => RuntimeCell;
   positionToCell: (event: { clientX: number; clientY: number }) => RuntimeCell;
   scrollViewportByLines: (lines: number) => void;
@@ -61,7 +49,6 @@ export function bindPointerEvents(options: BindPointerEventsOptions) {
     selectionState,
     touchSelectionState,
     desktopSelectionState,
-    scrollbarDragState,
     linkState,
     cleanupCanvasFns,
     isTouchPointer,
@@ -69,10 +56,7 @@ export function bindPointerEvents(options: BindPointerEventsOptions) {
     clearPendingDesktopSelection,
     tryActivatePendingTouchSelection,
     beginSelectionDrag,
-    noteScrollActivity,
-    getOverlayScrollbarLayout,
-    pointerToCanvasPx,
-    setViewportScrollOffset,
+    scrollViewportByWheel = () => {},
     normalizeSelectionCell,
     positionToCell,
     scrollViewportByLines,
@@ -98,30 +82,6 @@ export function bindPointerEvents(options: BindPointerEventsOptions) {
       : "pan-y pinch-zoom";
 
   const onPointerDown = (event: PointerEvent) => {
-    if (!isTouchPointer(event) && event.button === 0) {
-      const layout = getOverlayScrollbarLayout();
-      if (layout) {
-        const point = pointerToCanvasPx(event);
-        if (isPointInScrollbarHitArea(layout, point.x, point.y)) {
-          event.preventDefault();
-          noteScrollActivity();
-          const hitThumb = isPointInScrollbarThumb(layout, point.x, point.y);
-          scrollbarDragState.pointerId = event.pointerId;
-          scrollbarDragState.thumbGrabRatio = hitThumb
-            ? clamp((point.y - layout.thumbY) / Math.max(1, layout.thumbH), 0, 1)
-            : 0.5;
-          const targetOffset = scrollbarOffsetForPointerY(
-            layout,
-            point.y,
-            scrollbarDragState.thumbGrabRatio,
-          );
-          setViewportScrollOffset(targetOffset);
-          canvas.setPointerCapture?.(event.pointerId);
-          return;
-        }
-      }
-    }
-
     if (
       shouldRoutePointerToAppMouse(event.shiftKey) &&
       inputHandler.sendMouseEvent("down", event)
@@ -169,23 +129,6 @@ export function bindPointerEvents(options: BindPointerEventsOptions) {
   };
 
   const onPointerMove = (event: PointerEvent) => {
-    if (scrollbarDragState.pointerId === event.pointerId) {
-      const layout = getOverlayScrollbarLayout();
-      if (!layout) {
-        scrollbarDragState.pointerId = null;
-        return;
-      }
-      const point = pointerToCanvasPx(event);
-      const targetOffset = scrollbarOffsetForPointerY(
-        layout,
-        point.y,
-        scrollbarDragState.thumbGrabRatio,
-      );
-      setViewportScrollOffset(targetOffset);
-      event.preventDefault();
-      return;
-    }
-
     if (isTouchPointer(event)) {
       if (touchSelectionState.pendingPointerId === event.pointerId) {
         const dx = event.clientX - touchSelectionState.pendingStartX;
@@ -271,7 +214,6 @@ export function bindPointerEvents(options: BindPointerEventsOptions) {
     inputHandler,
     sendKeyInput,
     openLink,
-    scrollbarDragState,
     isTouchPointer,
     touchSelectionState,
     selectionState,
@@ -291,7 +233,7 @@ export function bindPointerEvents(options: BindPointerEventsOptions) {
   const { onPointerCancel, onWheel, onContextMenu, onPointerLeave } = createPointerAuxHandlers({
     inputHandler,
     shouldRoutePointerToAppMouse,
-    scrollViewportByLines,
+    scrollViewportByWheel,
     getWasmReady,
     getWasmHandle,
     getGridState,
@@ -302,7 +244,6 @@ export function bindPointerEvents(options: BindPointerEventsOptions) {
     selectionState,
     touchSelectionState,
     desktopSelectionState,
-    scrollbarDragState,
     updateCanvasCursor,
     markNeedsRender,
   });
@@ -324,6 +265,5 @@ export function bindPointerEvents(options: BindPointerEventsOptions) {
     canvas.removeEventListener("wheel", onWheel);
     canvas.removeEventListener("contextmenu", onContextMenu);
     clearPendingTouchSelection();
-    scrollbarDragState.pointerId = null;
   });
 }

@@ -288,7 +288,7 @@ export type SharedTickDeps = {
   decodePackedRGBA: (packed: number) => Color;
   cursorFallback: Color;
   scrollbarState: { lastTotal: number; lastOffset: number; lastLen: number };
-  appendOverlayScrollbar: (target: number[], total: number, offset: number, len: number) => void;
+  syncScrollbar: (total: number, offset: number, len: number) => void;
   webgpuUniforms: Float32Array;
   ensureInstanceBuffer: (state: WebGPUState, kind: "rect" | "glyph", minBytes: number) => void;
   GLYPH_INSTANCE_FLOATS: number;

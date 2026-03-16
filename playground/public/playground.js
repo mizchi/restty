@@ -59528,124 +59528,12 @@ function bindImeEvents(options) {
   });
 }
 
-// src/runtime/overlay-scrollbar.ts
-var OVERLAY_SCROLLBAR_WIDTH_CSS_PX = 7;
-var OVERLAY_SCROLLBAR_MARGIN_CSS_PX = 4;
-var OVERLAY_SCROLLBAR_INSET_Y_CSS_PX = 2;
-var OVERLAY_SCROLLBAR_MIN_THUMB_CSS_PX = 28;
-var OVERLAY_SCROLLBAR_CAP_SUPERSAMPLE = 8;
-function computeOverlayScrollbarLayout(total, offset, len, canvasWidth, canvasHeight, currentDpr) {
-  if (!(total > len && len > 0))
-    return null;
-  const dpr = Math.max(1, currentDpr || 1);
-  const width = Math.max(1, Math.round(OVERLAY_SCROLLBAR_WIDTH_CSS_PX * dpr));
-  const margin = Math.max(1, Math.round(OVERLAY_SCROLLBAR_MARGIN_CSS_PX * dpr));
-  const insetY = Math.max(0, Math.round(OVERLAY_SCROLLBAR_INSET_Y_CSS_PX * dpr));
-  const trackX = Math.max(0, canvasWidth - margin - width);
-  const trackY = insetY;
-  const trackH = Math.max(width, canvasHeight - insetY * 2);
-  const denom = Math.max(1, total - len);
-  const dynamicThumbH = Math.round(trackH * (len / total));
-  const minThumbH = Math.max(width, Math.round(OVERLAY_SCROLLBAR_MIN_THUMB_CSS_PX * dpr));
-  const thumbH = Math.min(trackH, Math.max(minThumbH, dynamicThumbH));
-  const thumbY = trackY + Math.round(offset / denom * (trackH - thumbH));
-  return { total, offset, len, denom, width, trackX, trackY, trackH, thumbY, thumbH };
-}
-function isPointInScrollbarHitArea(layout, x3, y) {
-  const hitPadX = Math.max(3, Math.round(layout.width * 0.35));
-  return x3 >= layout.trackX - hitPadX && x3 <= layout.trackX + layout.width + hitPadX && y >= layout.trackY && y <= layout.trackY + layout.trackH;
-}
-function isPointInScrollbarThumb(layout, x3, y) {
-  return x3 >= layout.trackX && x3 <= layout.trackX + layout.width && y >= layout.thumbY && y <= layout.thumbY + layout.thumbH;
-}
-function scrollbarOffsetForPointerY(layout, pointerY, thumbGrabRatio) {
-  const thumbTop = pointerY - layout.thumbH * thumbGrabRatio;
-  const trackSpan = Math.max(1, layout.trackH - layout.thumbH);
-  const ratio = clamp((thumbTop - layout.trackY) / trackSpan, 0, 1);
-  return Math.round(ratio * layout.denom);
-}
-function pushRoundedVerticalBar(out, x3, y, w, h, color, capSupersample = OVERLAY_SCROLLBAR_CAP_SUPERSAMPLE) {
-  const x02 = Math.round(x3);
-  const y02 = Math.round(y);
-  const width = Math.max(1, Math.round(w));
-  const height = Math.max(1, Math.round(h));
-  const radius = Math.min(width * 0.5, height * 0.5);
-  if (radius <= 0) {
-    pushRectBox(out, x02, y02, width, height, color);
-    return;
-  }
-  const capRows = Math.min(height, Math.max(1, Math.ceil(radius)));
-  const middleStart = capRows;
-  const middleEnd = Math.max(middleStart, height - capRows);
-  const middleH = middleEnd - middleStart;
-  if (middleH > 0) {
-    pushRectBox(out, x02, y02 + middleStart, width, middleH, color);
-  }
-  const radiusSq = radius * radius;
-  const centerX = width * 0.5;
-  const topCenterY = radius;
-  const bottomCenterY = height - radius;
-  const samplesPerAxis = Math.max(1, capSupersample | 0);
-  const totalSamples = samplesPerAxis * samplesPerAxis;
-  const invSamples = 1 / totalSamples;
-  const alphaBase = color[3];
-  const alphaEpsilon = 1 / 255;
-  const sampleCapPixelCoverage = (localX, localY, centerY) => {
-    let hits = 0;
-    for (let sy = 0;sy < samplesPerAxis; sy += 1) {
-      const sampleY = localY + (sy + 0.5) / samplesPerAxis;
-      for (let sx = 0;sx < samplesPerAxis; sx += 1) {
-        const sampleX = localX + (sx + 0.5) / samplesPerAxis;
-        const dx = sampleX - centerX;
-        const dy = sampleY - centerY;
-        if (dx * dx + dy * dy <= radiusSq)
-          hits += 1;
-      }
-    }
-    return hits * invSamples;
-  };
-  for (let row = 0;row < capRows; row += 1) {
-    const topY = y02 + row;
-    const bottomY = y02 + height - 1 - row;
-    for (let col = 0;col < width; col += 1) {
-      const coverageTop = sampleCapPixelCoverage(col, row, topCenterY);
-      if (coverageTop > 0) {
-        const alpha = alphaBase * coverageTop;
-        if (alpha > alphaEpsilon) {
-          out.push(x02 + col, topY, 1, 1, color[0], color[1], color[2], alpha);
-        }
-      }
-      if (bottomY !== topY) {
-        const localBottomY = height - 1 - row;
-        const coverageBottom = sampleCapPixelCoverage(col, localBottomY, bottomCenterY);
-        if (coverageBottom > 0) {
-          const alpha = alphaBase * coverageBottom;
-          if (alpha > alphaEpsilon) {
-            out.push(x02 + col, bottomY, 1, 1, color[0], color[1], color[2], alpha);
-          }
-        }
-      }
-    }
-  }
-}
-function resolveOverlayScrollbarAlpha(now, lastInputAt) {
-  const since = now - lastInputAt;
-  const fadeDelay = 160;
-  const fadeDuration = 520;
-  if (since < fadeDelay)
-    return 0.68;
-  if (since < fadeDelay + fadeDuration) {
-    return 0.68 * (1 - (since - fadeDelay) / fadeDuration);
-  }
-  return 0;
-}
-
 // src/runtime/create-runtime/interaction-runtime/bind-pointer-aux-handlers.ts
 function createPointerAuxHandlers(options) {
   const {
     inputHandler,
     shouldRoutePointerToAppMouse,
-    scrollViewportByLines,
+    scrollViewportByWheel = () => {},
     getWasmReady,
     getWasmHandle,
     getGridState,
@@ -59656,14 +59544,10 @@ function createPointerAuxHandlers(options) {
     selectionState,
     touchSelectionState,
     desktopSelectionState,
-    scrollbarDragState,
     updateCanvasCursor,
     markNeedsRender
   } = options;
   const onPointerCancel = (event) => {
-    if (scrollbarDragState.pointerId === event.pointerId) {
-      scrollbarDragState.pointerId = null;
-    }
     if (desktopSelectionState.pendingPointerId === event.pointerId) {
       clearPendingDesktopSelection();
     }
@@ -59693,16 +59577,7 @@ function createPointerAuxHandlers(options) {
     }
     if (!getWasmReady() || !getWasmHandle() || !getGridState().cellH)
       return;
-    const speed = event.shiftKey ? 0.5 : 1.5;
-    let lines = 0;
-    if (event.deltaMode === 1) {
-      lines = event.deltaY;
-    } else if (event.deltaMode === 2) {
-      lines = event.deltaY * getGridState().rows;
-    } else {
-      lines = event.deltaY / getGridState().cellH;
-    }
-    scrollViewportByLines(lines * speed);
+    scrollViewportByWheel(event);
     event.preventDefault();
   };
   const onContextMenu = (event) => {
@@ -59726,7 +59601,6 @@ function createPointerUpHandler(options) {
     inputHandler,
     sendKeyInput,
     openLink: openLink2,
-    scrollbarDragState,
     isTouchPointer,
     touchSelectionState,
     selectionState,
@@ -59743,11 +59617,6 @@ function createPointerUpHandler(options) {
     updateLinkHover
   } = options;
   return (event) => {
-    if (scrollbarDragState.pointerId === event.pointerId) {
-      scrollbarDragState.pointerId = null;
-      event.preventDefault();
-      return;
-    }
     if (isTouchPointer(event)) {
       if (touchSelectionState.pendingPointerId === event.pointerId) {
         clearPendingTouchSelection();
@@ -59823,7 +59692,6 @@ function bindPointerEvents(options) {
     selectionState,
     touchSelectionState,
     desktopSelectionState,
-    scrollbarDragState,
     linkState,
     cleanupCanvasFns,
     isTouchPointer,
@@ -59831,10 +59699,7 @@ function bindPointerEvents(options) {
     clearPendingDesktopSelection,
     tryActivatePendingTouchSelection,
     beginSelectionDrag,
-    noteScrollActivity,
-    getOverlayScrollbarLayout,
-    pointerToCanvasPx,
-    setViewportScrollOffset,
+    scrollViewportByWheel = () => {},
     normalizeSelectionCell: normalizeSelectionCell2,
     positionToCell: positionToCell2,
     scrollViewportByLines,
@@ -59854,23 +59719,6 @@ function bindPointerEvents(options) {
   };
   canvas.style.touchAction = touchSelectionMode === "long-press" || touchSelectionMode === "drag" ? "none" : "pan-y pinch-zoom";
   const onPointerDown = (event) => {
-    if (!isTouchPointer(event) && event.button === 0) {
-      const layout = getOverlayScrollbarLayout();
-      if (layout) {
-        const point = pointerToCanvasPx(event);
-        if (isPointInScrollbarHitArea(layout, point.x, point.y)) {
-          event.preventDefault();
-          noteScrollActivity();
-          const hitThumb = isPointInScrollbarThumb(layout, point.x, point.y);
-          scrollbarDragState.pointerId = event.pointerId;
-          scrollbarDragState.thumbGrabRatio = hitThumb ? clamp((point.y - layout.thumbY) / Math.max(1, layout.thumbH), 0, 1) : 0.5;
-          const targetOffset = scrollbarOffsetForPointerY(layout, point.y, scrollbarDragState.thumbGrabRatio);
-          setViewportScrollOffset(targetOffset);
-          canvas.setPointerCapture?.(event.pointerId);
-          return;
-        }
-      }
-    }
     if (shouldRoutePointerToAppMouse(event.shiftKey) && inputHandler.sendMouseEvent("down", event)) {
       clearPendingDesktopSelection();
       event.preventDefault();
@@ -59913,18 +59761,6 @@ function bindPointerEvents(options) {
     desktopSelectionState.startedWithActiveSelection = selectionState.active;
   };
   const onPointerMove = (event) => {
-    if (scrollbarDragState.pointerId === event.pointerId) {
-      const layout = getOverlayScrollbarLayout();
-      if (!layout) {
-        scrollbarDragState.pointerId = null;
-        return;
-      }
-      const point = pointerToCanvasPx(event);
-      const targetOffset = scrollbarOffsetForPointerY(layout, point.y, scrollbarDragState.thumbGrabRatio);
-      setViewportScrollOffset(targetOffset);
-      event.preventDefault();
-      return;
-    }
     if (isTouchPointer(event)) {
       if (touchSelectionState.pendingPointerId === event.pointerId) {
         const dx = event.clientX - touchSelectionState.pendingStartX;
@@ -59993,7 +59829,6 @@ function bindPointerEvents(options) {
     inputHandler,
     sendKeyInput,
     openLink: openLink2,
-    scrollbarDragState,
     isTouchPointer,
     touchSelectionState,
     selectionState,
@@ -60012,7 +59847,7 @@ function bindPointerEvents(options) {
   const { onPointerCancel, onWheel, onContextMenu, onPointerLeave } = createPointerAuxHandlers({
     inputHandler,
     shouldRoutePointerToAppMouse,
-    scrollViewportByLines,
+    scrollViewportByWheel,
     getWasmReady,
     getWasmHandle,
     getGridState,
@@ -60023,7 +59858,6 @@ function bindPointerEvents(options) {
     selectionState,
     touchSelectionState,
     desktopSelectionState,
-    scrollbarDragState,
     updateCanvasCursor,
     markNeedsRender
   });
@@ -60043,19 +59877,351 @@ function bindPointerEvents(options) {
     canvas.removeEventListener("wheel", onWheel);
     canvas.removeEventListener("contextmenu", onContextMenu);
     clearPendingTouchSelection();
-    scrollbarDragState.pointerId = null;
   });
+}
+
+// src/runtime/overlay-scrollbar.ts
+var OVERLAY_SCROLLBAR_WIDTH_CSS_PX = 7;
+var OVERLAY_SCROLLBAR_MARGIN_CSS_PX = 4;
+var OVERLAY_SCROLLBAR_INSET_Y_CSS_PX = 2;
+var OVERLAY_SCROLLBAR_MIN_THUMB_CSS_PX = 28;
+function computeOverlayScrollbarLayout(total, offset, len, canvasWidth, canvasHeight, currentDpr) {
+  if (!(total > len && len > 0))
+    return null;
+  const dpr = Math.max(1, currentDpr || 1);
+  const width = Math.max(1, Math.round(OVERLAY_SCROLLBAR_WIDTH_CSS_PX * dpr));
+  const margin = Math.max(1, Math.round(OVERLAY_SCROLLBAR_MARGIN_CSS_PX * dpr));
+  const insetY = Math.max(0, Math.round(OVERLAY_SCROLLBAR_INSET_Y_CSS_PX * dpr));
+  const trackX = Math.max(0, canvasWidth - margin - width);
+  const trackY = insetY;
+  const trackH = Math.max(width, canvasHeight - insetY * 2);
+  const denom = Math.max(1, total - len);
+  const dynamicThumbH = Math.round(trackH * (len / total));
+  const minThumbH = Math.max(width, Math.round(OVERLAY_SCROLLBAR_MIN_THUMB_CSS_PX * dpr));
+  const thumbH = Math.min(trackH, Math.max(minThumbH, dynamicThumbH));
+  const thumbY = trackY + Math.round(offset / denom * (trackH - thumbH));
+  return { total, offset, len, denom, width, trackX, trackY, trackH, thumbY, thumbH };
+}
+
+// src/runtime/create-runtime/native-scrollbar-host.ts
+var NATIVE_SCROLLBAR_STYLE_MARKER = "data-restty-native-scrollbar";
+var MAX_NATIVE_SCROLL_RANGE_PX = 8000000;
+var FADE_DELAY_MS = 160;
+var FADE_DURATION_MS = 520;
+var VISIBLE_OPACITY = 0.68;
+var MIN_SCROLL_PX_PER_ROW = 8;
+var MAX_SCROLL_PX_PER_ROW = 14;
+function ensureNativeScrollbarStyles() {
+  if (typeof document === "undefined")
+    return;
+  if (document.head.querySelector(`[${NATIVE_SCROLLBAR_STYLE_MARKER}]`))
+    return;
+  const style = document.createElement("style");
+  style.setAttribute(NATIVE_SCROLLBAR_STYLE_MARKER, "true");
+  style.textContent = `
+.restty-native-scroll-host {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.restty-native-scroll-host::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.restty-native-scroll-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.restty-native-scroll-canvas {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+  flex: none;
+  will-change: transform;
+}
+
+.restty-native-scroll-spacer {
+  width: 1px;
+  min-width: 1px;
+  pointer-events: none;
+}
+
+.restty-native-scroll-chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  overflow: hidden;
+}
+
+.restty-native-scroll-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(245, 245, 245, 0.75);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18);
+  opacity: 0;
+  transition: opacity ${FADE_DURATION_MS}ms ease;
+  pointer-events: auto;
+  cursor: default;
+}
+`;
+  document.head.append(style);
+}
+function createNativeScrollbarHost(options) {
+  const { canvas, getGridState, noteScrollActivity, setViewportScrollOffset } = options;
+  if (typeof document === "undefined") {
+    return {
+      flash: () => {},
+      sync: () => {},
+      destroy: () => {}
+    };
+  }
+  const parent = canvas.parentElement;
+  if (!parent) {
+    return {
+      flash: () => {},
+      sync: () => {},
+      destroy: () => {}
+    };
+  }
+  ensureNativeScrollbarStyles();
+  const root = document.createElement("div");
+  root.className = "restty-native-scroll-root";
+  const host = document.createElement("div");
+  host.className = "restty-native-scroll-host";
+  const spacer = document.createElement("div");
+  spacer.className = "restty-native-scroll-spacer";
+  const chrome = document.createElement("div");
+  chrome.className = "restty-native-scroll-chrome";
+  const thumb = document.createElement("div");
+  thumb.className = "restty-native-scroll-thumb";
+  chrome.append(thumb);
+  parent.insertBefore(root, canvas);
+  root.append(host, chrome);
+  host.append(canvas, spacer);
+  canvas.classList.add("restty-native-scroll-canvas");
+  let destroyed = false;
+  let currentLayout = null;
+  let currentDenom = 0;
+  let currentScrollRangePx = 0;
+  let ignoreNextScroll = false;
+  let fadeTimer = 0;
+  let dragPointerId = null;
+  let dragGrabRatio = 0.5;
+  const resolveScrollPxPerRow = () => {
+    const cellH = Math.max(1, Number(getGridState().cellH || 1));
+    return clamp(cellH * 0.5, MIN_SCROLL_PX_PER_ROW, MAX_SCROLL_PX_PER_ROW);
+  };
+  const setThumbVisible = (visible) => {
+    thumb.style.opacity = visible ? `${VISIBLE_OPACITY}` : "0";
+  };
+  const applyCanvasResidual = (offset) => {
+    if (!currentDenom || currentScrollRangePx <= 0) {
+      canvas.style.transform = "translate3d(0, 0, 0)";
+      return;
+    }
+    const logicalScrollTop = offset / currentDenom * currentScrollRangePx;
+    const residual = host.scrollTop - logicalScrollTop;
+    canvas.style.transform = `translate3d(0, ${-residual}px, 0)`;
+  };
+  const scheduleThumbFade = () => {
+    if (fadeTimer) {
+      clearTimeout(fadeTimer);
+      fadeTimer = 0;
+    }
+    setThumbVisible(true);
+    fadeTimer = window.setTimeout(() => {
+      fadeTimer = 0;
+      if (dragPointerId === null) {
+        setThumbVisible(false);
+      }
+    }, FADE_DELAY_MS);
+  };
+  const applyScrollTopToViewport = () => {
+    if (!currentDenom || currentScrollRangePx <= 0)
+      return;
+    const ratio = clamp(host.scrollTop / currentScrollRangePx, 0, 1);
+    const nextOffset = Math.round(ratio * currentDenom);
+    applyCanvasResidual(nextOffset);
+    setViewportScrollOffset(nextOffset);
+  };
+  const onHostScroll = () => {
+    if (ignoreNextScroll) {
+      ignoreNextScroll = false;
+      return;
+    }
+    noteScrollActivity();
+    scheduleThumbFade();
+    applyScrollTopToViewport();
+  };
+  const onHostWheel = (event) => {
+    if (!currentScrollRangePx)
+      return;
+    const maxScrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
+    const atTop = host.scrollTop <= 0;
+    const atBottom = host.scrollTop >= maxScrollTop;
+    if (atTop && event.deltaY < 0 || atBottom && event.deltaY > 0) {
+      event.preventDefault();
+    }
+  };
+  const pointerYToScrollTop = (clientY) => {
+    if (!currentLayout || currentScrollRangePx <= 0)
+      return 0;
+    const rect2 = root.getBoundingClientRect();
+    const localY = clientY - rect2.top;
+    const thumbTop = localY - currentLayout.thumbH * dragGrabRatio;
+    const trackSpan = Math.max(1, currentLayout.trackH - currentLayout.thumbH);
+    const ratio = clamp((thumbTop - currentLayout.trackY) / trackSpan, 0, 1);
+    return ratio * currentScrollRangePx;
+  };
+  const onThumbPointerMove = (event) => {
+    if (dragPointerId !== event.pointerId)
+      return;
+    host.scrollTop = pointerYToScrollTop(event.clientY);
+    event.preventDefault();
+  };
+  const endThumbDrag = (pointerId) => {
+    if (pointerId === null || dragPointerId !== pointerId)
+      return;
+    dragPointerId = null;
+    thumb.releasePointerCapture?.(pointerId);
+    scheduleThumbFade();
+  };
+  const onThumbPointerUp = (event) => {
+    endThumbDrag(event.pointerId);
+  };
+  const onThumbPointerCancel = (event) => {
+    endThumbDrag(event.pointerId);
+  };
+  const onThumbPointerDown = (event) => {
+    if (event.button !== 0 || !currentLayout)
+      return;
+    const rect2 = thumb.getBoundingClientRect();
+    dragPointerId = event.pointerId;
+    dragGrabRatio = clamp((event.clientY - rect2.top) / Math.max(1, rect2.height), 0, 1);
+    thumb.setPointerCapture?.(event.pointerId);
+    noteScrollActivity();
+    setThumbVisible(true);
+    host.scrollTop = pointerYToScrollTop(event.clientY);
+    event.preventDefault();
+  };
+  const onThumbPointerEnter = () => {
+    setThumbVisible(true);
+  };
+  const onThumbPointerLeave = () => {
+    if (dragPointerId === null) {
+      scheduleThumbFade();
+    }
+  };
+  host.addEventListener("scroll", onHostScroll, { passive: true });
+  host.addEventListener("wheel", onHostWheel, { passive: false });
+  thumb.addEventListener("pointerdown", onThumbPointerDown);
+  thumb.addEventListener("pointermove", onThumbPointerMove);
+  thumb.addEventListener("pointerup", onThumbPointerUp);
+  thumb.addEventListener("pointercancel", onThumbPointerCancel);
+  thumb.addEventListener("pointerenter", onThumbPointerEnter);
+  thumb.addEventListener("pointerleave", onThumbPointerLeave);
+  return {
+    flash: () => {
+      if (!currentLayout)
+        return;
+      scheduleThumbFade();
+    },
+    sync: (total, offset, len) => {
+      if (destroyed)
+        return;
+      const clientWidth = Math.max(1, host.clientWidth || canvas.clientWidth || canvas.width);
+      const clientHeight = Math.max(1, host.clientHeight || canvas.clientHeight || canvas.height);
+      if (!(total > len && len > 0)) {
+        currentLayout = null;
+        currentDenom = 0;
+        currentScrollRangePx = 0;
+        spacer.style.height = "0px";
+        chrome.style.display = "none";
+        canvas.style.transform = "translate3d(0, 0, 0)";
+        if (host.scrollTop !== 0) {
+          ignoreNextScroll = true;
+          host.scrollTop = 0;
+        }
+        return;
+      }
+      currentDenom = Math.max(1, total - len);
+      currentScrollRangePx = Math.min(MAX_NATIVE_SCROLL_RANGE_PX, Math.max(clientHeight, currentDenom * resolveScrollPxPerRow()));
+      spacer.style.height = `${currentScrollRangePx}px`;
+      const nextScrollTop = Math.round(offset / currentDenom * currentScrollRangePx);
+      if (Math.abs(host.scrollTop - nextScrollTop) > 0.5) {
+        ignoreNextScroll = true;
+        host.scrollTop = nextScrollTop;
+      }
+      applyCanvasResidual(offset);
+      currentLayout = computeOverlayScrollbarLayout(total, offset, len, clientWidth, clientHeight, 1);
+      if (!currentLayout) {
+        chrome.style.display = "none";
+        return;
+      }
+      chrome.style.display = "block";
+      thumb.style.left = `${currentLayout.trackX}px`;
+      thumb.style.width = `${currentLayout.width}px`;
+      thumb.style.height = `${currentLayout.thumbH}px`;
+      thumb.style.transform = `translateY(${currentLayout.thumbY}px)`;
+    },
+    destroy: () => {
+      if (destroyed)
+        return;
+      destroyed = true;
+      if (fadeTimer) {
+        clearTimeout(fadeTimer);
+        fadeTimer = 0;
+      }
+      host.removeEventListener("scroll", onHostScroll);
+      host.removeEventListener("wheel", onHostWheel);
+      thumb.removeEventListener("pointerdown", onThumbPointerDown);
+      thumb.removeEventListener("pointermove", onThumbPointerMove);
+      thumb.removeEventListener("pointerup", onThumbPointerUp);
+      thumb.removeEventListener("pointercancel", onThumbPointerCancel);
+      thumb.removeEventListener("pointerenter", onThumbPointerEnter);
+      thumb.removeEventListener("pointerleave", onThumbPointerLeave);
+      const currentCanvas = root.querySelector("canvas");
+      if (currentCanvas && root.parentElement) {
+        currentCanvas.classList.remove("restty-native-scroll-canvas");
+        currentCanvas.style.transform = "";
+        root.parentElement.replaceChild(currentCanvas, root);
+      } else {
+        root.remove();
+      }
+    }
+  };
 }
 
 // src/runtime/create-runtime/interaction-runtime/scrollbar-runtime.ts
 function createScrollbarRuntime(options) {
   const {
-    showOverlayScrollbar,
     scrollbarState,
     selectionState,
     linkState,
     getCanvas,
-    getCurrentDpr,
     getGridState,
     getWasmReady,
     getWasm,
@@ -60066,6 +60232,19 @@ function createScrollbarRuntime(options) {
     markSearchDirty
   } = options;
   let scrollRemainder = 0;
+  let pendingPrecisionScrollPx = 0;
+  const hasCoarsePointer = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(any-pointer: coarse)").matches;
+  const hasTouchPoints = typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
+  const nativeScrollHost = !hasCoarsePointer && !hasTouchPoints && typeof document !== "undefined" ? createNativeScrollbarHost({
+    canvas: getCanvas(),
+    getGridState,
+    noteScrollActivity: () => {
+      scrollbarState.lastInputAt = performance.now();
+    },
+    setViewportScrollOffset: (nextOffset) => {
+      setViewportScrollOffset(nextOffset);
+    }
+  }) : null;
   const getViewportScrollOffset = () => {
     const wasmHandle = getWasmHandle();
     const wasmExports = getWasmExports();
@@ -60094,6 +60273,7 @@ function createScrollbarRuntime(options) {
   };
   const noteScrollActivity = () => {
     scrollbarState.lastInputAt = performance.now();
+    nativeScrollHost?.flash();
   };
   const scrollViewportByLines = (lines) => {
     const wasm = getWasm();
@@ -60116,6 +60296,37 @@ function createScrollbarRuntime(options) {
     markSearchDirty?.();
     markNeedsRender();
     noteScrollActivity();
+  };
+  const scrollViewportByWheel = (event) => {
+    const { cellH, rows } = getGridState();
+    if (!cellH)
+      return;
+    const isPrecision = event.deltaMode === 0;
+    if (isPrecision) {
+      const precisionMultiplier = 2;
+      const adjustedPx = event.deltaY * precisionMultiplier;
+      const pendingPx = pendingPrecisionScrollPx + adjustedPx;
+      if (Math.abs(pendingPx) < cellH) {
+        pendingPrecisionScrollPx = pendingPx;
+        noteScrollActivity();
+        return;
+      }
+      const amount = pendingPx / cellH;
+      pendingPrecisionScrollPx = pendingPx - Math.trunc(amount) * cellH;
+      if (amount) {
+        scrollViewportByLines(Math.trunc(amount));
+      }
+      return;
+    }
+    pendingPrecisionScrollPx = 0;
+    if (event.deltaMode === 1) {
+      const discreteMultiplier = 3;
+      const yoff = event.deltaY > 0 ? Math.max(event.deltaY, 1) : Math.min(event.deltaY, -1);
+      scrollViewportByLines(yoff * discreteMultiplier);
+      return;
+    }
+    const pageLines = rows > 0 ? rows : 24;
+    scrollViewportByLines(event.deltaY * pageLines);
   };
   const setViewportScrollOffset = (nextOffset) => {
     const wasm = getWasm();
@@ -60142,50 +60353,16 @@ function createScrollbarRuntime(options) {
     markNeedsRender();
     noteScrollActivity();
   };
-  const pointerToCanvasPx = (event) => {
-    const canvas = getCanvas();
-    const rect2 = canvas.getBoundingClientRect();
-    const scaleX = rect2.width > 0 ? canvas.width / rect2.width : 1;
-    const scaleY = rect2.height > 0 ? canvas.height / rect2.height : 1;
-    return {
-      x: (event.clientX - rect2.left) * scaleX,
-      y: (event.clientY - rect2.top) * scaleY
-    };
-  };
-  const getOverlayScrollbarLayout = () => {
-    const wasmHandle = getWasmHandle();
-    const wasmExports = getWasmExports();
-    const { rows } = getGridState();
-    if (!showOverlayScrollbar || !wasmExports?.restty_scrollbar_total || !wasmHandle)
-      return null;
-    if (!rows)
-      return null;
-    const total = wasmExports.restty_scrollbar_total(wasmHandle) || 0;
-    const offset = wasmExports.restty_scrollbar_offset ? wasmExports.restty_scrollbar_offset(wasmHandle) : 0;
-    const len = wasmExports.restty_scrollbar_len ? wasmExports.restty_scrollbar_len(wasmHandle) : rows;
-    const canvas = getCanvas();
-    return computeOverlayScrollbarLayout(total, offset, len, canvas.width, canvas.height, getCurrentDpr());
-  };
-  const appendOverlayScrollbar = (overlayData, total, offset, len) => {
-    if (!showOverlayScrollbar)
-      return;
-    const canvas = getCanvas();
-    const layout = computeOverlayScrollbarLayout(total, offset, len, canvas.width, canvas.height, getCurrentDpr());
-    if (!layout)
-      return;
-    const alpha = resolveOverlayScrollbarAlpha(performance.now(), scrollbarState.lastInputAt);
-    if (alpha <= 0.01)
-      return;
-    const thumbColor = [0.96, 0.96, 0.96, alpha * 0.75];
-    pushRoundedVerticalBar(overlayData, layout.trackX, layout.thumbY, layout.width, layout.thumbH, thumbColor);
-  };
   return {
+    destroy: () => {
+      nativeScrollHost?.destroy();
+    },
     noteScrollActivity,
     scrollViewportByLines,
-    setViewportScrollOffset,
-    pointerToCanvasPx,
-    getOverlayScrollbarLayout,
-    appendOverlayScrollbar
+    scrollViewportByWheel,
+    syncScrollbar: (total, offset, len) => {
+      nativeScrollHost?.sync(total, offset, len);
+    }
   };
 }
 
@@ -60196,7 +60373,6 @@ function createRuntimeInteraction(options) {
     touchSelectionMode,
     touchSelectionLongPressMs,
     touchSelectionMoveThresholdPx,
-    showOverlayScrollbar,
     imeInput,
     cleanupCanvasFns,
     getCanvas,
@@ -60237,10 +60413,6 @@ function createRuntimeInteraction(options) {
     lastTotal: 0,
     lastOffset: 0,
     lastLen: 0
-  };
-  const scrollbarDragState = {
-    pointerId: null,
-    thumbGrabRatio: 0.5
   };
   const imeState = {
     composing: false,
@@ -60299,12 +60471,10 @@ function createRuntimeInteraction(options) {
     return true;
   };
   const scrollbarRuntime = createScrollbarRuntime({
-    showOverlayScrollbar,
     scrollbarState,
     selectionState,
     linkState,
     getCanvas,
-    getCurrentDpr,
     getGridState,
     getWasmReady,
     getWasm,
@@ -60313,6 +60483,9 @@ function createRuntimeInteraction(options) {
     updateLinkHover: () => updateLinkHover(null),
     markNeedsRender,
     markSearchDirty
+  });
+  cleanupCanvasFns.push(() => {
+    scrollbarRuntime.destroy();
   });
   const positionToCell2 = (event) => {
     const canvas = getCanvas();
@@ -60393,7 +60566,6 @@ function createRuntimeInteraction(options) {
       selectionState,
       touchSelectionState,
       desktopSelectionState,
-      scrollbarDragState,
       linkState,
       cleanupCanvasFns,
       isTouchPointer,
@@ -60401,10 +60573,7 @@ function createRuntimeInteraction(options) {
       clearPendingDesktopSelection,
       tryActivatePendingTouchSelection,
       beginSelectionDrag,
-      noteScrollActivity: scrollbarRuntime.noteScrollActivity,
-      getOverlayScrollbarLayout: scrollbarRuntime.getOverlayScrollbarLayout,
-      pointerToCanvasPx: scrollbarRuntime.pointerToCanvasPx,
-      setViewportScrollOffset: scrollbarRuntime.setViewportScrollOffset,
+      scrollViewportByWheel: scrollbarRuntime.scrollViewportByWheel,
       normalizeSelectionCell: normalizeSelectionCell2,
       positionToCell: positionToCell2,
       scrollViewportByLines: scrollbarRuntime.scrollViewportByLines,
@@ -60440,7 +60609,7 @@ function createRuntimeInteraction(options) {
     positionToPixel,
     clearSelection,
     updateImePosition,
-    appendOverlayScrollbar: scrollbarRuntime.appendOverlayScrollbar,
+    syncScrollbar: scrollbarRuntime.syncScrollbar,
     bindCanvasEvents
   };
 }
@@ -62408,7 +62577,7 @@ function populateWebGLOverlays(ctx) {
     wasmExports,
     wasmHandle,
     scrollbarState,
-    appendOverlayScrollbar
+    syncScrollbar
   } = deps;
   if (cursor && imeState.preedit) {
     const preeditText = imeState.preedit;
@@ -62548,7 +62717,7 @@ function populateWebGLOverlays(ctx) {
       scrollbarState.lastOffset = offset;
       scrollbarState.lastLen = len;
     }
-    appendOverlayScrollbar(overlayData, total, offset, len);
+    syncScrollbar(total, offset, len);
   }
 }
 
@@ -63704,7 +63873,7 @@ function drawWebGPUFrame(params) {
     cursorFallback,
     clamp: clamp2,
     scrollbarState,
-    appendOverlayScrollbar,
+    syncScrollbar,
     webgpuUniforms,
     ensureInstanceBuffer: ensureInstanceBuffer2,
     GLYPH_INSTANCE_FLOATS,
@@ -63783,7 +63952,7 @@ function drawWebGPUFrame(params) {
       scrollbarState.lastOffset = offset;
       scrollbarState.lastLen = len;
     }
-    appendOverlayScrollbar(frame.overlayData, total, offset, len);
+    syncScrollbar(total, offset, len);
   }
   webgpuUniforms[0] = canvas.width;
   webgpuUniforms[1] = canvas.height;
@@ -65671,9 +65840,6 @@ function createResttyApp(options) {
   };
   let fontHinting = options.fontHinting ?? false;
   let fontHintTarget = resolveFontHintTarget(options.fontHintTarget);
-  const hasCoarsePointer = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(any-pointer: coarse)").matches;
-  const hasTouchPoints = typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
-  const showOverlayScrollbar = !(hasCoarsePointer || hasTouchPoints);
   const nerdIconScale = Number.isFinite(options.nerdIconScale) ? Number(options.nerdIconScale) : 1;
   const alphaBlending = options.alphaBlending ?? "linear-corrected";
   const cleanupFns = [];
@@ -65744,7 +65910,7 @@ function createResttyApp(options) {
   const BOLD_BRIGHTEN = 0.18;
   const BOLD_OFFSET = 0.06;
   const FAINT_ALPHA = 0.6;
-  const TARGET_RENDER_FPS = 60;
+  const TARGET_RENDER_FPS = 120;
   const BACKGROUND_RENDER_FPS = 15;
   const GLYPH_SHAPE_CACHE_LIMIT = 12000;
   const FONT_PICK_CACHE_LIMIT = 16000;
@@ -65877,7 +66043,6 @@ function createResttyApp(options) {
     touchSelectionMode,
     touchSelectionLongPressMs,
     touchSelectionMoveThresholdPx,
-    showOverlayScrollbar,
     imeInput,
     cleanupCanvasFns,
     getCanvas: () => canvas,
@@ -65906,7 +66071,7 @@ function createResttyApp(options) {
     positionToPixel,
     clearSelection,
     updateImePosition,
-    appendOverlayScrollbar,
+    syncScrollbar,
     bindCanvasEvents: bindCanvasInteractionEvents
   } = runtimeInteraction;
   const searchRuntime = createRuntimeSearch({
@@ -66549,7 +66714,7 @@ function createResttyApp(options) {
       return cursorFallback;
     },
     scrollbarState,
-    appendOverlayScrollbar,
+    syncScrollbar,
     webgpuUniforms,
     ensureInstanceBuffer,
     GLYPH_INSTANCE_FLOATS,
@@ -71581,5 +71746,5 @@ if (firstState) {
 }
 queueResizeAllPanes();
 
-//# debugId=CACCEC955809693664756E2164756E21
+//# debugId=F525FBC9FDA634F764756E2164756E21
 //# sourceMappingURL=app.js.map

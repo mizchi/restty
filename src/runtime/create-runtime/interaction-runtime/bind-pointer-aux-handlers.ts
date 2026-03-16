@@ -3,7 +3,6 @@ import type {
   RuntimeCell,
   RuntimeDesktopSelectionState,
   RuntimeGridState,
-  RuntimeScrollbarDragState,
   RuntimeSelectionState,
   RuntimeTouchSelectionState,
 } from "./types";
@@ -11,7 +10,7 @@ import type {
 type CreatePointerAuxHandlersOptions = {
   inputHandler: InputHandler;
   shouldRoutePointerToAppMouse: (shiftKey: boolean) => boolean;
-  scrollViewportByLines: (lines: number) => void;
+  scrollViewportByWheel?: (event: WheelEvent) => void;
   getWasmReady: () => boolean;
   getWasmHandle: () => number;
   getGridState: () => RuntimeGridState;
@@ -22,7 +21,6 @@ type CreatePointerAuxHandlersOptions = {
   selectionState: RuntimeSelectionState;
   touchSelectionState: RuntimeTouchSelectionState;
   desktopSelectionState: RuntimeDesktopSelectionState;
-  scrollbarDragState: RuntimeScrollbarDragState;
   updateCanvasCursor: () => void;
   markNeedsRender: () => void;
 };
@@ -40,7 +38,7 @@ export function createPointerAuxHandlers(
   const {
     inputHandler,
     shouldRoutePointerToAppMouse,
-    scrollViewportByLines,
+    scrollViewportByWheel = () => {},
     getWasmReady,
     getWasmHandle,
     getGridState,
@@ -51,15 +49,11 @@ export function createPointerAuxHandlers(
     selectionState,
     touchSelectionState,
     desktopSelectionState,
-    scrollbarDragState,
     updateCanvasCursor,
     markNeedsRender,
   } = options;
 
   const onPointerCancel = (event: PointerEvent) => {
-    if (scrollbarDragState.pointerId === event.pointerId) {
-      scrollbarDragState.pointerId = null;
-    }
     if (desktopSelectionState.pendingPointerId === event.pointerId) {
       clearPendingDesktopSelection();
     }
@@ -89,16 +83,7 @@ export function createPointerAuxHandlers(
       }
     }
     if (!getWasmReady() || !getWasmHandle() || !getGridState().cellH) return;
-    const speed = event.shiftKey ? 0.5 : 1.5;
-    let lines = 0;
-    if (event.deltaMode === 1) {
-      lines = event.deltaY;
-    } else if (event.deltaMode === 2) {
-      lines = event.deltaY * getGridState().rows;
-    } else {
-      lines = event.deltaY / getGridState().cellH;
-    }
-    scrollViewportByLines(lines * speed);
+    scrollViewportByWheel(event);
     event.preventDefault();
   };
 

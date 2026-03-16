@@ -117,6 +117,22 @@ function createMouseEvent(
   return { event, prevented: () => prevented };
 }
 
+function createWheelEvent(
+  overrides: Partial<WheelEvent> = {},
+): { event: WheelEvent; prevented: () => boolean } {
+  let prevented = false;
+  const event = {
+    shiftKey: false,
+    deltaY: 40,
+    deltaMode: 0,
+    preventDefault: () => {
+      prevented = true;
+    },
+    ...overrides,
+  } as WheelEvent;
+  return { event, prevented: () => prevented };
+}
+
 test("bindPointerEvents routes primary click to app mouse when mouse reporting is active", () => {
   const mouseKinds: string[] = [];
   const canvas = new FakeCanvas();
@@ -159,7 +175,6 @@ test("bindPointerEvents routes primary click to app mouse when mouse reporting i
       pendingTimer: 0,
     },
     desktopSelectionState,
-    scrollbarDragState: { pointerId: null, thumbGrabRatio: 0.5 },
     linkState: { hoverId: 0, hoverUri: "" },
     cleanupCanvasFns: [],
     isTouchPointer: (event) => event.pointerType === "touch",
@@ -171,10 +186,6 @@ test("bindPointerEvents routes primary click to app mouse when mouse reporting i
     },
     tryActivatePendingTouchSelection: () => false,
     beginSelectionDrag: () => {},
-    noteScrollActivity: () => {},
-    getOverlayScrollbarLayout: () => null,
-    pointerToCanvasPx: () => ({ x: 0, y: 0 }),
-    setViewportScrollOffset: () => {},
     normalizeSelectionCell: (cell) => cell,
     positionToCell: () => ({ row: 0, col: 0 }),
     scrollViewportByLines: () => {},
@@ -241,7 +252,6 @@ test("bindPointerEvents keeps Shift+click as local selection bypass", () => {
       pendingTimer: 0,
     },
     desktopSelectionState,
-    scrollbarDragState: { pointerId: null, thumbGrabRatio: 0.5 },
     linkState: { hoverId: 0, hoverUri: "" },
     cleanupCanvasFns: [],
     isTouchPointer: (event) => event.pointerType === "touch",
@@ -253,10 +263,6 @@ test("bindPointerEvents keeps Shift+click as local selection bypass", () => {
     },
     tryActivatePendingTouchSelection: () => false,
     beginSelectionDrag: () => {},
-    noteScrollActivity: () => {},
-    getOverlayScrollbarLayout: () => null,
-    pointerToCanvasPx: () => ({ x: 0, y: 0 }),
-    setViewportScrollOffset: () => {},
     normalizeSelectionCell: (cell) => cell,
     positionToCell: () => ({ row: 1, col: 1 }),
     scrollViewportByLines: () => {},
@@ -318,7 +324,6 @@ test("bindPointerEvents routes mouse when reporting is active even outside alt-s
       pendingCell: null,
       startedWithActiveSelection: false,
     },
-    scrollbarDragState: { pointerId: null, thumbGrabRatio: 0.5 },
     linkState: { hoverId: 0, hoverUri: "" },
     cleanupCanvasFns: [],
     isTouchPointer: (event) => event.pointerType === "touch",
@@ -326,10 +331,6 @@ test("bindPointerEvents routes mouse when reporting is active even outside alt-s
     clearPendingDesktopSelection: () => {},
     tryActivatePendingTouchSelection: () => false,
     beginSelectionDrag: () => {},
-    noteScrollActivity: () => {},
-    getOverlayScrollbarLayout: () => null,
-    pointerToCanvasPx: () => ({ x: 0, y: 0 }),
-    setViewportScrollOffset: () => {},
     normalizeSelectionCell: (cell) => cell,
     positionToCell: () => ({ row: 0, col: 0 }),
     scrollViewportByLines: () => {},
@@ -385,7 +386,6 @@ test("bindPointerEvents keeps Shift+contextmenu as local bypass", () => {
       pendingCell: null,
       startedWithActiveSelection: false,
     },
-    scrollbarDragState: { pointerId: null, thumbGrabRatio: 0.5 },
     linkState: { hoverId: 0, hoverUri: "" },
     cleanupCanvasFns: [],
     isTouchPointer: (event) => event.pointerType === "touch",
@@ -393,10 +393,6 @@ test("bindPointerEvents keeps Shift+contextmenu as local bypass", () => {
     clearPendingDesktopSelection: () => {},
     tryActivatePendingTouchSelection: () => false,
     beginSelectionDrag: () => {},
-    noteScrollActivity: () => {},
-    getOverlayScrollbarLayout: () => null,
-    pointerToCanvasPx: () => ({ x: 0, y: 0 }),
-    setViewportScrollOffset: () => {},
     normalizeSelectionCell: (cell) => cell,
     positionToCell: () => ({ row: 0, col: 0 }),
     scrollViewportByLines: () => {},
@@ -416,4 +412,73 @@ test("bindPointerEvents keeps Shift+contextmenu as local bypass", () => {
   const shiftContextMenu = createMouseEvent({ shiftKey: true });
   canvas.emit("contextmenu", shiftContextMenu.event as unknown as Event);
   expect(shiftContextMenu.prevented()).toBe(false);
+});
+
+test("bindPointerEvents routes wheel through native-host scroll handler", () => {
+  const canvas = new FakeCanvas();
+  let wheelCalls = 0;
+
+  bindPointerEvents({
+    canvas: canvas as unknown as HTMLCanvasElement,
+    bindOptions: {
+      inputHandler: createInputHandlerStub({
+        mouseActive: false,
+        sendMouseEvent: () => false,
+      }),
+      sendKeyInput: () => {},
+      sendPasteText: () => {},
+      sendPastePayloadFromDataTransfer: () => false,
+      getLastKeydownSeq: () => "",
+      getLastKeydownSeqAt: () => 0,
+      keydownBeforeinputDedupeMs: 80,
+      openLink: () => {},
+    },
+    touchSelectionMode: "off",
+    touchSelectionLongPressMs: 450,
+    touchSelectionMoveThresholdPx: 10,
+    selectionState: { active: false, dragging: false, anchor: null, focus: null },
+    touchSelectionState: {
+      pendingPointerId: null,
+      activePointerId: null,
+      panPointerId: null,
+      pendingCell: null,
+      pendingStartedAt: 0,
+      pendingStartX: 0,
+      pendingStartY: 0,
+      panLastY: 0,
+      pendingTimer: 0,
+    },
+    desktopSelectionState: {
+      pendingPointerId: null,
+      pendingCell: null,
+      startedWithActiveSelection: false,
+    },
+    linkState: { hoverId: 0, hoverUri: "" },
+    cleanupCanvasFns: [],
+    isTouchPointer: (event) => event.pointerType === "touch",
+    clearPendingTouchSelection: () => {},
+    clearPendingDesktopSelection: () => {},
+    tryActivatePendingTouchSelection: () => false,
+    beginSelectionDrag: () => {},
+    normalizeSelectionCell: (cell) => cell,
+    positionToCell: () => ({ row: 0, col: 0 }),
+    scrollViewportByLines: () => {
+      throw new Error("line scroll path should not run");
+    },
+    scrollViewportByWheel: () => {
+      wheelCalls += 1;
+    },
+    clearSelection: () => {},
+    updateCanvasCursor: () => {},
+    markNeedsRender: () => {},
+    updateLinkHover: () => {},
+    getGridState: () => ({ cols: 80, rows: 24, cellW: 10, cellH: 20 }),
+    getWasmReady: () => true,
+    getWasmHandle: () => 1,
+  });
+
+  const wheel = createWheelEvent();
+  canvas.emit("wheel", wheel.event as unknown as Event);
+  expect(wheelCalls).toBe(1);
+  expect(wheel.prevented()).toBe(true);
 });

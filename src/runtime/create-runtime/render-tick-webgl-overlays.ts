@@ -54,7 +54,7 @@ export function populateWebGLOverlays(ctx: WebGLTickContext) {
     wasmExports,
     wasmHandle,
     scrollbarState,
-    appendOverlayScrollbar,
+    syncScrollbar,
   } = deps;
 
   if (cursor && imeState.preedit) {
@@ -251,6 +251,6 @@ export function populateWebGLOverlays(ctx: WebGLTickContext) {
       scrollbarState.lastOffset = offset;
       scrollbarState.lastLen = len;
     }
-    appendOverlayScrollbar(overlayData, total, offset, len);
+    syncScrollbar(total, offset, len);
   }
 }

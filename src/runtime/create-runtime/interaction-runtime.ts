@@ -47,6 +47,7 @@ export function createRuntimeInteraction(
     getWasmExports,
     updateLinkHover,
     markNeedsRender,
+    markSearchDirty,
   } = options;
 
   const selectionState = createSelectionState();
@@ -162,6 +163,7 @@ export function createRuntimeInteraction(
     getWasmExports,
     updateLinkHover: () => updateLinkHover(null),
     markNeedsRender,
+    markSearchDirty,
   });
 
   const positionToCell = (event: { clientX: number; clientY: number }) => {

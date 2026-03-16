@@ -1,12 +1,14 @@
 import type { DesktopNotification } from "../input";
 import {
   createResttyAppPaneManager,
+  type ResttyAppPaneManager,
   type CreateResttyAppPaneManagerOptions,
   type ResttyManagedAppPane,
   type ResttyManagedPaneStyleOptions,
+  type ResttyManagedPaneSearchUiStyleOptions,
   type ResttyPaneAppOptionsInput,
 } from "./pane-app-manager";
-import type { ResttyPaneManager, ResttyPaneSplitDirection } from "./panes-types";
+import type { ResttyPaneSplitDirection } from "./panes-types";
 import type { ResttyFontSource, ResttyShaderStage } from "../runtime/types";
 import { ResttyPaneHandle } from "./restty-pane-handle";
 import { ResttyActivePaneApi } from "./restty/active-pane-api";
@@ -95,7 +97,7 @@ export type ResttyOptions = Omit<CreateResttyAppPaneManagerOptions, "appOptions"
  * convenience methods that operate on the active pane.
  */
 export class Restty extends ResttyActivePaneApi {
-  readonly paneManager: ResttyPaneManager<ResttyManagedAppPane>;
+  readonly paneManager: ResttyAppPaneManager;
   private fontSources: ResttyFontSource[] | undefined;
   private readonly shaderOps: ResttyShaderOps;
   private readonly pluginOps: ResttyPluginOps;
@@ -257,6 +259,14 @@ export class Restty extends ResttyActivePaneApi {
     paneOps.setPaneStyleOptions(this.paneManager, options);
   }
 
+  getSearchUiStyleOptions(): Readonly<Required<ResttyManagedPaneSearchUiStyleOptions>> {
+    return paneOps.getSearchUiStyleOptions(this.paneManager);
+  }
+
+  setSearchUiStyleOptions(options: ResttyManagedPaneSearchUiStyleOptions): void {
+    paneOps.setSearchUiStyleOptions(this.paneManager, options);
+  }
+
   setActivePane(id: number, options?: { focus?: boolean }): void {
     paneOps.setActivePane(this.paneManager, this.paneLookup(), this.lifecycleHooks(), id, options);
   }
@@ -336,12 +346,33 @@ export class Restty extends ResttyActivePaneApi {
     getPaneById: (id: number) => ResttyManagedAppPane | null;
     getActivePane: () => ResttyManagedAppPane | null;
     getFocusedPane: () => ResttyManagedAppPane | null;
+    openPaneSearch: ResttyAppPaneManager["openPaneSearch"];
+    closePaneSearch: ResttyAppPaneManager["closePaneSearch"];
+    togglePaneSearch: ResttyAppPaneManager["togglePaneSearch"];
+    isPaneSearchOpen: ResttyAppPaneManager["isPaneSearchOpen"];
+    getSearchUiStyleOptions: ResttyAppPaneManager["getSearchUiStyleOptions"];
+    setSearchUiStyleOptions: ResttyAppPaneManager["setSearchUiStyleOptions"];
   } {
+    const paneManager = this.paneManager;
     return {
       getPanes: () => this.getPanes(),
       getPaneById: (id) => this.getPaneById(id),
       getActivePane: () => this.getActivePane(),
       getFocusedPane: () => this.getFocusedPane(),
+      openPaneSearch: (id, options) => {
+        paneManager.openPaneSearch(id, options);
+      },
+      closePaneSearch: (id, options) => {
+        paneManager.closePaneSearch(id, options);
+      },
+      togglePaneSearch: (id, options) => {
+        paneManager.togglePaneSearch(id, options);
+      },
+      isPaneSearchOpen: (id) => paneManager.isPaneSearchOpen(id),
+      getSearchUiStyleOptions: () => paneManager.getSearchUiStyleOptions(),
+      setSearchUiStyleOptions: (options) => {
+        paneManager.setSearchUiStyleOptions(options);
+      },
     };
   }
 

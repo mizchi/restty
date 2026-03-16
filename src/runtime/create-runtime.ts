@@ -108,10 +108,12 @@ import { createPtyInputRuntime } from "./create-runtime/pty-input-runtime";
 import { createRuntimeInteraction } from "./create-runtime/interaction-runtime";
 import { createKittyRenderRuntime } from "./create-runtime/kitty-render-runtime";
 import { createRuntimeLifecycleThemeSize } from "./create-runtime/lifecycle-theme-size";
+import { createRuntimeSearch } from "./create-runtime/search-runtime";
 import { createRuntimeRenderTicks } from "./create-runtime/render-ticks";
 import { createRuntimeFontRuntimeHelpers } from "./create-runtime/font-runtime-helpers";
 import { createRuntimeReporting } from "./create-runtime/runtime-reporting";
 import { createResttyFontResourceStore } from "./font-resource-store";
+import type { RuntimeTerminalColor } from "./create-runtime/highlight-terminal-color-utils";
 import {
   createRuntimeAppApi,
   type RuntimeAppApiRuntime,
@@ -261,11 +263,37 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
 
   const DEFAULT_BG_BASE: Color = [0.08, 0.09, 0.1, 1.0];
   const DEFAULT_FG_BASE: Color = [0.92, 0.93, 0.95, 1.0];
-  const SELECTION_BASE: Color = [0.35, 0.55, 0.9, 0.45];
+  const SELECTION_BACKGROUND_BASE: RuntimeTerminalColor = {
+    kind: "color",
+    color: [0.35, 0.55, 0.9, 0.45],
+  };
+  const SELECTION_FOREGROUND_BASE: RuntimeTerminalColor | null = null;
+  const SEARCH_MATCH_BACKGROUND_BASE: RuntimeTerminalColor = {
+    kind: "color",
+    color: [1.0, 224 / 255, 130 / 255, 1.0],
+  };
+  const SEARCH_CURRENT_MATCH_BACKGROUND_BASE: RuntimeTerminalColor = {
+    kind: "color",
+    color: [242 / 255, 165 / 255, 126 / 255, 1.0],
+  };
+  const SEARCH_MATCH_TEXT_BASE: RuntimeTerminalColor = {
+    kind: "color",
+    color: [0, 0, 0, 1.0],
+  };
+  const SEARCH_CURRENT_MATCH_TEXT_BASE: RuntimeTerminalColor = {
+    kind: "color",
+    color: [0, 0, 0, 1.0],
+  };
   const CURSOR_BASE: Color = [0.95, 0.95, 0.95, 1.0];
   let defaultBg: Color = [...DEFAULT_BG_BASE];
   let defaultFg: Color = [...DEFAULT_FG_BASE];
-  let selectionColor: Color = [...SELECTION_BASE];
+  let selectionBackgroundColor: RuntimeTerminalColor = SELECTION_BACKGROUND_BASE;
+  let selectionForegroundColor: RuntimeTerminalColor | null = SELECTION_FOREGROUND_BASE;
+  let searchMatchBackgroundColor: RuntimeTerminalColor = SEARCH_MATCH_BACKGROUND_BASE;
+  let searchCurrentMatchBackgroundColor: RuntimeTerminalColor =
+    SEARCH_CURRENT_MATCH_BACKGROUND_BASE;
+  let searchMatchTextColor: RuntimeTerminalColor = SEARCH_MATCH_TEXT_BASE;
+  let searchCurrentMatchTextColor: RuntimeTerminalColor = SEARCH_CURRENT_MATCH_TEXT_BASE;
   let cursorFallback: Color = [...CURSOR_BASE];
   const CURSOR_BLINK_MS = 600;
   const FORCE_CURSOR_BLINK = false;
@@ -444,6 +472,9 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     markNeedsRender: () => {
       needsRender = true;
     },
+    markSearchDirty: () => {
+      searchRuntime.markDirty();
+    },
   });
   const {
     selectionState,
@@ -458,6 +489,16 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     appendOverlayScrollbar,
     bindCanvasEvents: bindCanvasInteractionEvents,
   } = runtimeInteraction;
+  const searchRuntime = createRuntimeSearch({
+    callbacks,
+    cleanupFns,
+    getWasmReady: () => wasmReady,
+    getWasm: () => wasm,
+    getWasmHandle: () => wasmHandle,
+    markNeedsRender: () => {
+      needsRender = true;
+    },
+  });
   const kittyRenderRuntime = createKittyRenderRuntime({
     getWasm: () => wasm,
     markNeedsRender: () => {
@@ -649,6 +690,9 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     setNeedsRender: () => {
       needsRender = true;
     },
+    markSearchDirty: () => {
+      searchRuntime.markDirty();
+    },
     getFontHinting: () => fontHinting,
     getFontHintTarget: () => fontHintTarget,
     fontScaleOverrides: FONT_SCALE_OVERRIDES,
@@ -726,7 +770,12 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     fontState,
     defaultBgBase: DEFAULT_BG_BASE,
     defaultFgBase: DEFAULT_FG_BASE,
-    selectionBase: SELECTION_BASE,
+    selectionBackgroundBase: SELECTION_BACKGROUND_BASE,
+    selectionForegroundBase: SELECTION_FOREGROUND_BASE,
+    searchMatchBackgroundBase: SEARCH_MATCH_BACKGROUND_BASE,
+    searchCurrentMatchBackgroundBase: SEARCH_CURRENT_MATCH_BACKGROUND_BASE,
+    searchMatchTextBase: SEARCH_MATCH_TEXT_BASE,
+    searchCurrentMatchTextBase: SEARCH_CURRENT_MATCH_TEXT_BASE,
     cursorBase: CURSOR_BASE,
     getCanvas: () => canvas,
     setCanvas: (nextCanvas) => (canvas = nextCanvas),
@@ -740,7 +789,12 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     setActiveTheme: (theme) => (activeTheme = theme),
     setDefaultBg: (value) => (defaultBg = value),
     setDefaultFg: (value) => (defaultFg = value),
-    setSelectionColor: (value) => (selectionColor = value),
+    setSelectionBackgroundColor: (value) => (selectionBackgroundColor = value),
+    setSelectionForegroundColor: (value) => (selectionForegroundColor = value),
+    setSearchMatchBackgroundColor: (value) => (searchMatchBackgroundColor = value),
+    setSearchCurrentMatchBackgroundColor: (value) => (searchCurrentMatchBackgroundColor = value),
+    setSearchMatchTextColor: (value) => (searchMatchTextColor = value),
+    setSearchCurrentMatchTextColor: (value) => (searchCurrentMatchTextColor = value),
     setCursorFallback: (value) => (cursorFallback = value),
     getWasmReady: () => wasmReady,
     getWasm: () => wasm,
@@ -1007,9 +1061,25 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     nerdIconScale,
     selectionState,
     selectionForRow,
+    getSearchViewportMatches: searchRuntime.getViewportMatches,
     pushRect,
-    get selectionColor() {
-      return selectionColor;
+    get selectionBackgroundColor() {
+      return selectionBackgroundColor;
+    },
+    get selectionForegroundColor() {
+      return selectionForegroundColor;
+    },
+    get searchMatchBackgroundColor() {
+      return searchMatchBackgroundColor;
+    },
+    get searchCurrentMatchBackgroundColor() {
+      return searchCurrentMatchBackgroundColor;
+    },
+    get searchMatchTextColor() {
+      return searchMatchTextColor;
+    },
+    get searchCurrentMatchTextColor() {
+      return searchCurrentMatchTextColor;
     },
     STYLE_BOLD,
     STYLE_ITALIC,
@@ -1195,6 +1265,12 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     destroyWebGPUStageTargets,
     clearWebGLShaderStages,
     destroyWebGLStageTargets,
+    markSearchDirty: () => {
+      searchRuntime.markDirty();
+    },
+    handleSearchWasmReset: () => {
+      searchRuntime.handleWasmReset();
+    },
     getSelectionText,
     initialPreferredRenderer: options.renderer ?? "auto",
     maxScrollbackBytes: options.maxScrollbackBytes,
@@ -1206,6 +1282,11 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     setFontHintTarget,
     setFontSources,
     resetTheme,
+    setSearchQuery: searchRuntime.setQuery,
+    clearSearch: searchRuntime.clear,
+    searchNext: searchRuntime.next,
+    searchPrevious: searchRuntime.previous,
+    getSearchState: searchRuntime.getState,
     dumpAtlasForCodepoint,
     resize,
     focus,

@@ -30,6 +30,24 @@ const CursorInfo = extern struct {
     reserved: u32 = 0,
 };
 
+const SearchViewportSpan = extern struct {
+    row: u16,
+    start_col: u16,
+    end_col: u16,
+    selected: u8,
+    reserved: u8 = 0,
+};
+
+const SearchStatus = extern struct {
+    active: u8,
+    pending: u8,
+    complete: u8,
+    reserved: u8 = 0,
+    generation: u32,
+    total_matches: u32,
+    selected_index: i32,
+};
+
 const CellBuffers = struct {
     codepoints: []u32,
     content_tags: []u8,
@@ -446,6 +464,16 @@ const StreamHandler = struct {
         self: *StreamHandler,
         comptime action: StreamAction.Tag,
         value: StreamAction.Value(action),
+    ) void {
+        self.vtFallible(action, value) catch |err| {
+            log.warn("error handling VT action action={} err={}", .{ action, err });
+        };
+    }
+
+    fn vtFallible(
+        self: *StreamHandler,
+        comptime action: StreamAction.Tag,
+        value: StreamAction.Value(action),
     ) !void {
         switch (action) {
             .device_attributes => try self.deviceAttributes(value),
@@ -460,7 +488,7 @@ const StreamHandler = struct {
                 self.apc.feed(self.alloc, value);
             },
             .apc_end => try self.apcEnd(),
-            else => try self.readonly.vt(action, value),
+            else => self.readonly.vt(action, value),
         }
     }
 };
@@ -489,8 +517,65 @@ const Restty = struct {
         .color_rgba = 0,
         .reserved = 0,
     },
+    search: SearchState = .{},
     rows: u16,
     cols: u16,
+};
+
+const SearchState = struct {
+    query: std.ArrayListUnmanaged(u8) = .{},
+    screen_search: ?ghostty.search.Screen = null,
+    viewport_search: ?ghostty.search.Viewport = null,
+    viewport_matches: std.ArrayListUnmanaged(SearchViewportSpan) = .{},
+    status: SearchStatus = .{
+        .active = 0,
+        .pending = 0,
+        .complete = 0,
+        .reserved = 0,
+        .generation = 0,
+        .total_matches = 0,
+        .selected_index = -1,
+    },
+    active_screen_key: i32 = -1,
+    viewport_dirty: bool = false,
+    active_dirty: bool = false,
+
+    fn deinit(self: *SearchState, alloc: Allocator) void {
+        self.query.deinit(alloc);
+        if (self.screen_search) |*s| s.deinit();
+        if (self.viewport_search) |*s| s.deinit();
+        self.viewport_matches.deinit(alloc);
+        self.* = .{};
+    }
+
+    fn resetRuntime(self: *SearchState) void {
+        self.viewport_matches.clearRetainingCapacity();
+        self.status.active = if (self.query.items.len > 0) 1 else 0;
+        self.status.total_matches = 0;
+        self.status.selected_index = -1;
+        self.status.pending = 0;
+        self.status.complete = 0;
+        self.viewport_dirty = false;
+        self.active_dirty = false;
+        self.active_screen_key = -1;
+    }
+
+    fn bumpGeneration(self: *SearchState) void {
+        self.status.generation +%= 1;
+    }
+
+    fn setQuery(self: *SearchState, alloc: Allocator, value: []const u8) !void {
+        self.query.clearRetainingCapacity();
+        try self.query.appendSlice(alloc, value);
+    }
+
+    fn isQueryEqual(self: *const SearchState, value: []const u8) bool {
+        return std.mem.eql(u8, self.query.items, value);
+    }
+
+    fn isActive(self: *const SearchState) bool {
+        return self.status.active != 0;
+    }
 };
 
 fn packRGBA(rgb: ghostty.color.RGB, a: u8) u32 {
@@ -541,6 +626,145 @@ fn clampI16Unsigned(value: u16) i16 {
     const max_u16: u16 = @intCast(max);
     if (value > max_u16) return max;
     return @intCast(value);
+}
+
+fn activeScreenKeyInt(h: *Restty) i32 {
+    return @intCast(@intFromEnum(h.term.screens.active_key));
+}
+
+fn clearSearch(h: *Restty) void {
+    h.search.deinit(h.alloc);
+}
+
+fn initSearch(h: *Restty, query: []const u8) !void {
+    clearSearch(h);
+    if (query.len == 0) return;
+
+    try h.search.setQuery(h.alloc, query);
+    h.search.status.active = 1;
+    h.search.status.pending = 1;
+    h.search.status.complete = 0;
+    h.search.status.total_matches = 0;
+    h.search.status.selected_index = -1;
+    h.search.active_screen_key = activeScreenKeyInt(h);
+    h.search.viewport_search = try .init(h.alloc, query);
+    h.search.screen_search = try .init(
+        h.alloc,
+        h.term.screens.active,
+        query,
+    );
+    if (h.search.viewport_search) |*vp| vp.active_dirty = true;
+    h.search.viewport_dirty = true;
+    h.search.active_dirty = true;
+    h.search.bumpGeneration();
+}
+
+fn ensureSearchActiveScreen(h: *Restty) !void {
+    if (!h.search.isActive()) return;
+    if (h.search.active_screen_key == activeScreenKeyInt(h) and
+        h.search.screen_search != null and
+        h.search.viewport_search != null) return;
+    try initSearch(h, h.search.query.items);
+}
+
+fn refreshSearchMetadata(h: *Restty) void {
+    const s = if (h.search.screen_search) |*s| s else {
+        h.search.status.total_matches = 0;
+        h.search.status.selected_index = -1;
+        h.search.status.pending = 0;
+        h.search.status.complete = 1;
+        return;
+    };
+    h.search.status.total_matches = @intCast(s.matchesLen());
+    h.search.status.selected_index = if (s.selected) |sel| @intCast(sel.idx) else -1;
+}
+
+fn refreshViewportMatches(h: *Restty, force_refresh: bool) !void {
+    const vp = if (h.search.viewport_search) |*vp| vp else {
+        h.search.viewport_matches.clearRetainingCapacity();
+        return;
+    };
+    if (force_refresh) vp.reset();
+    vp.active_dirty = true;
+    const changed = try vp.update(&h.term.screens.active.pages);
+    if (!changed and !force_refresh and !h.search.viewport_dirty) return;
+
+    h.search.viewport_matches.clearRetainingCapacity();
+    const selected = if (h.search.screen_search) |*screen_search|
+        screen_search.selectedMatch()
+    else
+        null;
+    while (vp.next()) |hl| {
+        const slice = hl.chunks.slice();
+        const chunk_len = slice.len;
+        for (0..chunk_len) |chunk_idx| {
+            const row_start = slice.items(.start)[chunk_idx];
+            const row_end = slice.items(.end)[chunk_idx];
+            const node = slice.items(.node)[chunk_idx];
+            var row = row_start;
+            while (row < row_end) : (row += 1) {
+                const viewport_pt = h.term.screens.active.pages.pointFromPin(.viewport, .{
+                    .node = node,
+                    .x = 0,
+                    .y = row,
+                }) orelse continue;
+                const start_col: u16 = @intCast(if (chunk_idx == 0 and row == row_start) hl.top_x else 0);
+                const end_col_exclusive: u16 = @intCast(if (chunk_idx + 1 == chunk_len and row + 1 == row_end) hl.bot_x + 1 else h.cols);
+                if (end_col_exclusive <= start_col) continue;
+                try h.search.viewport_matches.append(h.alloc, .{
+                    .row = @intCast(viewport_pt.viewport.y),
+                    .start_col = start_col,
+                    .end_col = end_col_exclusive,
+                    .selected = if (selected) |sel|
+                        @intFromBool(sel.untracked().eql(hl.untracked()))
+                    else
+                        0,
+                });
+            }
+        }
+    }
+    h.search.viewport_dirty = false;
+}
+
+fn stepSearch(h: *Restty, budget: u32) !void {
+    if (!h.search.isActive()) return;
+    try ensureSearchActiveScreen(h);
+    const screen_search = if (h.search.screen_search) |*s| s else return;
+
+    // Keep active-area and viewport state fresh while search is active.
+    try screen_search.reloadActive();
+    h.search.active_dirty = false;
+
+    var remaining: u32 = if (budget == 0) 64 else budget;
+    var force_viewport_refresh = h.search.viewport_dirty;
+    while (remaining > 0) : (remaining -= 1) {
+        screen_search.tick() catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.FeedRequired => {
+                try screen_search.feed();
+            },
+            error.SearchComplete => {
+                h.search.status.complete = 1;
+                h.search.status.pending = 0;
+                force_viewport_refresh = true;
+                break;
+            },
+        };
+    }
+
+    if (h.search.status.complete == 0) {
+        h.search.status.pending = 1;
+    }
+    refreshSearchMetadata(h);
+    try refreshViewportMatches(h, force_viewport_refresh);
+    h.search.bumpGeneration();
+}
+
+fn scrollToSelectedSearchMatch(h: *Restty) void {
+    const screen_search = if (h.search.screen_search) |*s| s else return;
+    const selected = screen_search.selectedMatch() orelse return;
+    h.term.screens.active.scroll(.{ .pin = selected.startPin() });
+    h.search.viewport_dirty = true;
 }
 
 fn kittyFormatToAbi(format: anytype) u8 {
@@ -756,6 +980,7 @@ pub export fn restty_destroy(handle: ?*Restty) void {
     const h = handle orelse return;
     h.stream.deinit();
     h.render_state.deinit(h.alloc);
+    h.search.deinit(h.alloc);
     h.term.deinit(h.alloc);
     h.buffers.deinit(h.alloc);
     h.graphemes.deinit(h.alloc);
@@ -772,13 +997,93 @@ pub export fn restty_write(handle: ?*Restty, ptr: [*]const u8, len: usize) u32 {
     if (len == 0) return @intFromEnum(ErrorCode.ok);
     const slice = ptr[0..len];
     ensureScrollingRegion(h);
-    h.stream.nextSlice(slice) catch return @intFromEnum(ErrorCode.internal);
+    h.stream.nextSlice(slice);
+    if (h.search.isActive()) {
+        h.search.viewport_dirty = true;
+        h.search.active_dirty = true;
+    }
     return @intFromEnum(ErrorCode.ok);
 }
 
 pub export fn restty_scroll_viewport(handle: ?*Restty, delta: i32) u32 {
     const h = handle orelse return @intFromEnum(ErrorCode.invalid_handle);
-    h.term.scrollViewport(.{ .delta = delta }) catch return @intFromEnum(ErrorCode.internal);
+    h.term.scrollViewport(.{ .delta = delta });
+    if (h.search.isActive()) {
+        h.search.viewport_dirty = true;
+    }
+    return @intFromEnum(ErrorCode.ok);
+}
+
+pub export fn restty_search_set_query(handle: ?*Restty, ptr: [*]const u8, len: usize) u32 {
+    const h = handle orelse return @intFromEnum(ErrorCode.invalid_handle);
+    const query = ptr[0..len];
+    if (len == 0) {
+        clearSearch(h);
+        return @intFromEnum(ErrorCode.ok);
+    }
+    if (h.search.isActive() and h.search.isQueryEqual(query)) return @intFromEnum(ErrorCode.ok);
+    initSearch(h, query) catch |err| return switch (err) {
+        error.OutOfMemory => @intFromEnum(ErrorCode.out_of_memory),
+    };
+    return @intFromEnum(ErrorCode.ok);
+}
+
+pub export fn restty_search_clear(handle: ?*Restty) u32 {
+    const h = handle orelse return @intFromEnum(ErrorCode.invalid_handle);
+    clearSearch(h);
+    return @intFromEnum(ErrorCode.ok);
+}
+
+pub export fn restty_search_step(handle: ?*Restty, budget: u32) u32 {
+    const h = handle orelse return @intFromEnum(ErrorCode.invalid_handle);
+    stepSearch(h, budget) catch |err| return switch (err) {
+        error.OutOfMemory => @intFromEnum(ErrorCode.out_of_memory),
+    };
+    return @intFromEnum(ErrorCode.ok);
+}
+
+pub export fn restty_search_status_ptr(handle: ?*Restty) usize {
+    const h = handle orelse return 0;
+    return @intFromPtr(&h.search.status);
+}
+
+pub export fn restty_search_viewport_match_count(handle: ?*Restty) u32 {
+    const h = handle orelse return 0;
+    return @intCast(h.search.viewport_matches.items.len);
+}
+
+pub export fn restty_search_viewport_matches_ptr(handle: ?*Restty) usize {
+    const h = handle orelse return 0;
+    return if (h.search.viewport_matches.items.len == 0) 0 else @intFromPtr(h.search.viewport_matches.items.ptr);
+}
+
+pub export fn restty_search_select_next(handle: ?*Restty) u32 {
+    const h = handle orelse return @intFromEnum(ErrorCode.invalid_handle);
+    const screen_search = if (h.search.screen_search) |*s| s else return @intFromEnum(ErrorCode.ok);
+    _ = screen_search.select(.next) catch |err| return switch (err) {
+        error.OutOfMemory => @intFromEnum(ErrorCode.out_of_memory),
+    };
+    refreshSearchMetadata(h);
+    scrollToSelectedSearchMatch(h);
+    refreshViewportMatches(h, true) catch |err| return switch (err) {
+        error.OutOfMemory => @intFromEnum(ErrorCode.out_of_memory),
+    };
+    h.search.bumpGeneration();
+    return @intFromEnum(ErrorCode.ok);
+}
+
+pub export fn restty_search_select_prev(handle: ?*Restty) u32 {
+    const h = handle orelse return @intFromEnum(ErrorCode.invalid_handle);
+    const screen_search = if (h.search.screen_search) |*s| s else return @intFromEnum(ErrorCode.ok);
+    _ = screen_search.select(.prev) catch |err| return switch (err) {
+        error.OutOfMemory => @intFromEnum(ErrorCode.out_of_memory),
+    };
+    refreshSearchMetadata(h);
+    scrollToSelectedSearchMatch(h);
+    refreshViewportMatches(h, true) catch |err| return switch (err) {
+        error.OutOfMemory => @intFromEnum(ErrorCode.out_of_memory),
+    };
+    h.search.bumpGeneration();
     return @intFromEnum(ErrorCode.ok);
 }
 
@@ -882,6 +1187,10 @@ pub export fn restty_resize(handle: ?*Restty, cols: u16, rows: u16) u32 {
     if (cols == 0 or rows == 0) return @intFromEnum(ErrorCode.invalid_arg);
     h.term.resize(h.alloc, cols, rows) catch return @intFromEnum(ErrorCode.internal);
     ensureScrollingRegion(h);
+    if (h.search.isActive()) {
+        h.search.viewport_dirty = true;
+        h.search.active_dirty = true;
+    }
     return @intFromEnum(ErrorCode.ok);
 }
 

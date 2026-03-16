@@ -22,6 +22,24 @@ export type CursorInfo = {
   color: number;
 };
 
+/** Search status snapshot from the WASM terminal core. */
+export type SearchStatus = {
+  active: boolean;
+  pending: boolean;
+  complete: boolean;
+  generation: number;
+  totalMatches: number;
+  selectedIndex: number | null;
+};
+
+/** Visible search-highlight span in viewport coordinates. */
+export type SearchViewportMatch = {
+  row: number;
+  startCol: number;
+  endCol: number;
+  selected: boolean;
+};
+
 /** Kitty graphics protocol image placement descriptor. */
 export type KittyPlacement = {
   imageId: number;
@@ -143,6 +161,14 @@ export type ResttyWasmExports = WebAssembly.Exports & {
   restty_kitty_placement_stride?: () => number;
   restty_kitty_placement_count?: (handle: number) => number;
   restty_kitty_placements_ptr?: (handle: number) => number;
+  restty_search_set_query?: (handle: number, ptr: number, len: number) => number;
+  restty_search_clear?: (handle: number) => number;
+  restty_search_step?: (handle: number, budget: number) => number;
+  restty_search_status_ptr?: (handle: number) => number;
+  restty_search_viewport_match_count?: (handle: number) => number;
+  restty_search_viewport_matches_ptr?: (handle: number) => number;
+  restty_search_select_next?: (handle: number) => number;
+  restty_search_select_prev?: (handle: number) => number;
 };
 
 /** Construction options for WASM runtime. */

@@ -34,3 +34,4 @@ If you are integrating restty into an app, read in this order:
 
 - [`development/playground.md`](./development/playground.md)
 - [`development/roadmap.md`](./development/roadmap.md)
+- [`development/search.md`](./development/search.md)

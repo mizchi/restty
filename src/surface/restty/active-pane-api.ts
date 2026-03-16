@@ -1,6 +1,11 @@
 import type { InputHandler, MouseMode } from "../../input";
 import type { GhosttyTheme } from "../../theme";
 import type { ResttyPaneHandle } from "../restty-pane-handle";
+import type {
+  ResttyPaneSearchUiCloseOptions,
+  ResttyPaneSearchUiOpenOptions,
+} from "../pane-search-ui";
+import type { ResttyManagedPaneSearchUiStyleOptions } from "../pane-app-manager";
 
 export abstract class ResttyActivePaneApi {
   protected abstract requireActivePaneHandle(): ResttyPaneHandle;
@@ -59,6 +64,30 @@ export abstract class ResttyActivePaneApi {
 
   pasteFromClipboard(): Promise<boolean> {
     return this.requireActivePaneHandle().pasteFromClipboard();
+  }
+
+  openSearch(options?: ResttyPaneSearchUiOpenOptions): void {
+    this.requireActivePaneHandle().openSearch(options);
+  }
+
+  closeSearch(options?: ResttyPaneSearchUiCloseOptions): void {
+    this.requireActivePaneHandle().closeSearch(options);
+  }
+
+  toggleSearch(options?: ResttyPaneSearchUiOpenOptions & ResttyPaneSearchUiCloseOptions): void {
+    this.requireActivePaneHandle().toggleSearch(options);
+  }
+
+  isSearchOpen(): boolean {
+    return this.requireActivePaneHandle().isSearchOpen();
+  }
+
+  getSearchUiStyleOptions(): Readonly<Required<ResttyManagedPaneSearchUiStyleOptions>> {
+    return this.requireActivePaneHandle().getSearchUiStyleOptions();
+  }
+
+  setSearchUiStyleOptions(options: ResttyManagedPaneSearchUiStyleOptions): void {
+    this.requireActivePaneHandle().setSearchUiStyleOptions(options);
   }
 
   dumpAtlasForCodepoint(cp: number): void {

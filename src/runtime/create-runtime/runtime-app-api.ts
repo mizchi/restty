@@ -48,6 +48,11 @@ type RuntimePublicApiOptions = {
   setFontHintTarget: ResttyApp["setFontHintTarget"];
   setFontSources: ResttyApp["setFontSources"];
   resetTheme: ResttyApp["resetTheme"];
+  setSearchQuery: ResttyApp["setSearchQuery"];
+  clearSearch: ResttyApp["clearSearch"];
+  searchNext: ResttyApp["searchNext"];
+  searchPrevious: ResttyApp["searchPrevious"];
+  getSearchState: ResttyApp["getSearchState"];
   dumpAtlasForCodepoint: ResttyApp["dumpAtlasForCodepoint"];
   resize: ResttyApp["resize"];
   focus: ResttyApp["focus"];
@@ -117,6 +122,8 @@ type CreateRuntimeAppApiOptions = {
   destroyWebGPUStageTargets: () => void;
   clearWebGLShaderStages: (state?: WebGLState) => void;
   destroyWebGLStageTargets: (state?: WebGLState) => void;
+  markSearchDirty: () => void;
+  handleSearchWasmReset: () => void;
 };
 
 export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): RuntimeAppApiRuntime {
@@ -166,6 +173,8 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
     destroyWebGPUStageTargets,
     clearWebGLShaderStages,
     destroyWebGLStageTargets,
+    markSearchDirty,
+    handleSearchWasmReset,
   } = options;
 
   const internalState: RuntimeInternalState = {
@@ -306,6 +315,7 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
     shared.wasm.setPixelSize(shared.wasmHandle, canvas.width, canvas.height);
     writeToWasm(shared.wasmHandle, normalized);
     flushWasmOutputToPty();
+    markSearchDirty();
     if (source === "pty" && inputHandler.isSynchronizedOutput?.()) {
       ptyInputRuntime.scheduleSyncOutputReset();
       return;
@@ -510,6 +520,7 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
       }
       instance.renderUpdate(wasmHandle);
       writeState({ wasmHandle, needsRender: true });
+      handleSearchWasmReset();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`restty error: ${message}`);
@@ -675,6 +686,11 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
       getMouseStatus,
       copySelectionToClipboard,
       pasteFromClipboard,
+      setSearchQuery: publicApiOptions.setSearchQuery,
+      clearSearch: publicApiOptions.clearSearch,
+      searchNext: publicApiOptions.searchNext,
+      searchPrevious: publicApiOptions.searchPrevious,
+      getSearchState: publicApiOptions.getSearchState,
       dumpAtlasForCodepoint: publicApiOptions.dumpAtlasForCodepoint,
       resize: publicApiOptions.resize,
       focus: publicApiOptions.focus,

@@ -6,6 +6,8 @@ export type ThemeColor = {
   a?: number;
 };
 
+export type ThemeTerminalColor = ThemeColor | "cell-foreground" | "cell-background";
+
 /**
  * Parsed Ghostty terminal theme with semantic colors and full 256-color palette.
  */
@@ -23,9 +25,17 @@ export type GhosttyTheme = {
     /** Text color under the cursor. */
     cursorText?: ThemeColor;
     /** Selection background color. */
-    selectionBackground?: ThemeColor;
+    selectionBackground?: ThemeTerminalColor;
     /** Selection foreground (text) color. */
-    selectionForeground?: ThemeColor;
+    selectionForeground?: ThemeTerminalColor;
+    /** Search match background color. */
+    searchBackground?: ThemeTerminalColor;
+    /** Search match foreground color. */
+    searchForeground?: ThemeTerminalColor;
+    /** Active search match background color. */
+    searchSelectedBackground?: ThemeTerminalColor;
+    /** Active search match foreground color. */
+    searchSelectedForeground?: ThemeTerminalColor;
     /** 256-color palette (indices 0-255). */
     palette: Array<ThemeColor | undefined>;
   };
@@ -138,6 +148,15 @@ export function parseGhosttyColor(value: string): ThemeColor | null {
   return parseHexColor(value) || parseRgbColor(value) || parseNamedColor(value);
 }
 
+/** Parse a Ghostty TerminalColor value. */
+export function parseGhosttyTerminalColor(value: string): ThemeTerminalColor | null {
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed === "cell-foreground" || trimmed === "cell-background") {
+    return trimmed;
+  }
+  return parseGhosttyColor(value);
+}
+
 /** Convert ThemeColor to normalized RGBA floats (0.0-1.0). */
 export function colorToFloats(
   color: ThemeColor,
@@ -188,27 +207,36 @@ export function parseGhosttyTheme(text: string): GhosttyTheme {
       continue;
     }
 
-    const color = parseGhosttyColor(value);
-    if (!color) continue;
-
     switch (key) {
       case "background":
-        colors.background = color;
+        colors.background = parseGhosttyColor(value) ?? undefined;
         break;
       case "foreground":
-        colors.foreground = color;
+        colors.foreground = parseGhosttyColor(value) ?? undefined;
         break;
       case "cursor-color":
-        colors.cursor = color;
+        colors.cursor = parseGhosttyColor(value) ?? undefined;
         break;
       case "cursor-text":
-        colors.cursorText = color;
+        colors.cursorText = parseGhosttyColor(value) ?? undefined;
         break;
       case "selection-background":
-        colors.selectionBackground = color;
+        colors.selectionBackground = parseGhosttyTerminalColor(value) ?? undefined;
         break;
       case "selection-foreground":
-        colors.selectionForeground = color;
+        colors.selectionForeground = parseGhosttyTerminalColor(value) ?? undefined;
+        break;
+      case "search-background":
+        colors.searchBackground = parseGhosttyTerminalColor(value) ?? undefined;
+        break;
+      case "search-foreground":
+        colors.searchForeground = parseGhosttyTerminalColor(value) ?? undefined;
+        break;
+      case "search-selected-background":
+        colors.searchSelectedBackground = parseGhosttyTerminalColor(value) ?? undefined;
+        break;
+      case "search-selected-foreground":
+        colors.searchSelectedForeground = parseGhosttyTerminalColor(value) ?? undefined;
         break;
       default:
         break;

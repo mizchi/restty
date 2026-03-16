@@ -2,6 +2,7 @@ import type { InputHandler } from "../../input";
 import type { FontManagerState } from "../../fonts";
 import type { Color, WebGLState, WebGPUState } from "../../renderer";
 import type { GhosttyTheme } from "../../theme";
+import type { RuntimeTerminalColor } from "./highlight-terminal-color-utils";
 import type { ResttyWasm } from "../../wasm";
 import type { ResttyAppCallbacks } from "../types";
 
@@ -49,7 +50,12 @@ export type LifecycleThemeSizeDeps = {
   fontState: FontManagerState;
   defaultBgBase: Color;
   defaultFgBase: Color;
-  selectionBase: Color;
+  selectionBackgroundBase: RuntimeTerminalColor;
+  selectionForegroundBase: RuntimeTerminalColor | null;
+  searchMatchBackgroundBase: RuntimeTerminalColor;
+  searchCurrentMatchBackgroundBase: RuntimeTerminalColor;
+  searchMatchTextBase: RuntimeTerminalColor;
+  searchCurrentMatchTextBase: RuntimeTerminalColor;
   cursorBase: Color;
   getCanvas: () => HTMLCanvasElement;
   setCanvas: (canvas: HTMLCanvasElement) => void;
@@ -63,7 +69,12 @@ export type LifecycleThemeSizeDeps = {
   setActiveTheme: (theme: GhosttyTheme | null) => void;
   setDefaultBg: (value: Color) => void;
   setDefaultFg: (value: Color) => void;
-  setSelectionColor: (value: Color) => void;
+  setSelectionBackgroundColor: (value: RuntimeTerminalColor) => void;
+  setSelectionForegroundColor: (value: RuntimeTerminalColor | null) => void;
+  setSearchMatchBackgroundColor: (value: RuntimeTerminalColor) => void;
+  setSearchCurrentMatchBackgroundColor: (value: RuntimeTerminalColor) => void;
+  setSearchMatchTextColor: (value: RuntimeTerminalColor) => void;
+  setSearchCurrentMatchTextColor: (value: RuntimeTerminalColor) => void;
   setCursorFallback: (value: Color) => void;
   getWasmReady: () => boolean;
   getWasm: () => ResttyWasm | null;

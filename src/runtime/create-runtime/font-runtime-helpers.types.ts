@@ -109,6 +109,7 @@ export type CreateRuntimeFontRuntimeHelpersOptions = {
   getWasmHandle: () => number;
   ptyTransport: PtyTransport;
   setNeedsRender: () => void;
+  markSearchDirty?: () => void;
   getFontHinting: () => boolean;
   getFontHintTarget: () => ResttyFontHintTarget;
   fontScaleOverrides: Array<{ match: RegExp; scale: number }>;

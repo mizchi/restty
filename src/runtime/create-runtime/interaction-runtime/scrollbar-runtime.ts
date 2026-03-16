@@ -28,6 +28,7 @@ export type CreateScrollbarRuntimeOptions = {
   getWasmExports: () => ResttyWasmExports | null;
   updateLinkHover: (cell: null) => void;
   markNeedsRender: () => void;
+  markSearchDirty?: () => void;
 };
 
 export type ScrollbarRuntime = {
@@ -59,6 +60,7 @@ export function createScrollbarRuntime(options: CreateScrollbarRuntimeOptions): 
     getWasmExports,
     updateLinkHover,
     markNeedsRender,
+    markSearchDirty,
   } = options;
 
   let scrollRemainder = 0;
@@ -106,6 +108,7 @@ export function createScrollbarRuntime(options: CreateScrollbarRuntimeOptions): 
     shiftSelectionByRows(beforeOffset - afterOffset);
     if (linkState.hoverId) updateLinkHover(null);
     wasm.renderUpdate(wasmHandle);
+    markSearchDirty?.();
     markNeedsRender();
     noteScrollActivity();
   };
@@ -130,6 +133,7 @@ export function createScrollbarRuntime(options: CreateScrollbarRuntimeOptions): 
     shiftSelectionByRows(beforeOffset - afterOffset);
     if (linkState.hoverId) updateLinkHover(null);
     wasm.renderUpdate(wasmHandle);
+    markSearchDirty?.();
     markNeedsRender();
     noteScrollActivity();
   };

@@ -3,10 +3,22 @@ import type { PtyTransport } from "../pty";
 import type { WebGPUCoreState } from "../renderer";
 import type { GhosttyTheme } from "../theme";
 import type { ResttyWasm } from "../wasm";
+import type { SearchViewportMatch } from "../wasm";
 import type { Font as TextShaperFont } from "text-shaper";
 
 /** Callback for WASM log messages. */
 export type ResttyWasmLogListener = (message: string) => void;
+
+export type ResttySearchState = {
+  query: string;
+  active: boolean;
+  pending: boolean;
+  complete: boolean;
+  total: number;
+  selectedIndex: number | null;
+};
+
+export type ResttySearchViewportMatch = SearchViewportMatch;
 
 /** Shared parsed font face reused across panes within a session. */
 export type ResttyFontResourceFace = {
@@ -116,6 +128,8 @@ export type ResttyAppCallbacks = {
   onMouseStatus?: (status: string) => void;
   /** Terminal requested a desktop notification via OSC 9 / OSC 777. */
   onDesktopNotification?: (notification: DesktopNotification) => void;
+  /** Terminal search state changed. */
+  onSearchState?: (state: ResttySearchState) => void;
 };
 
 /** Raw font data as an ArrayBuffer or typed-array view. */
@@ -359,6 +373,16 @@ export type ResttyApp = {
   copySelectionToClipboard: () => Promise<boolean>;
   /** Paste clipboard contents into the terminal. */
   pasteFromClipboard: () => Promise<boolean>;
+  /** Update the active terminal search query. */
+  setSearchQuery: (query: string) => void;
+  /** Clear terminal search state and visible highlights. */
+  clearSearch: () => void;
+  /** Navigate to the next terminal search match. */
+  searchNext: () => void;
+  /** Navigate to the previous terminal search match. */
+  searchPrevious: () => void;
+  /** Get the current terminal search state. */
+  getSearchState: () => ResttySearchState;
   /** Dump the glyph atlas entry for a given Unicode codepoint. */
   dumpAtlasForCodepoint: (cp: number) => void;
   /** Resize terminal grid to explicit columns/rows. */

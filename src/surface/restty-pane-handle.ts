@@ -1,7 +1,26 @@
 import type { InputHandler, MouseMode } from "../input";
 import type { GhosttyTheme } from "../theme";
-import type { ResttyManagedAppPane } from "./pane-app-manager";
-import type { ResttyShaderStage } from "../runtime/types";
+import type {
+  ResttyManagedAppPane,
+  ResttyManagedPaneSearchUiStyleOptions,
+} from "./pane-app-manager";
+import type { ResttySearchState, ResttyShaderStage } from "../runtime/types";
+import type {
+  ResttyPaneSearchUiCloseOptions,
+  ResttyPaneSearchUiOpenOptions,
+} from "./pane-search-ui";
+
+type PaneSearchUiHandleOps = {
+  open: (paneId: number, options?: ResttyPaneSearchUiOpenOptions) => void;
+  close: (paneId: number, options?: ResttyPaneSearchUiCloseOptions) => void;
+  toggle: (
+    paneId: number,
+    options?: ResttyPaneSearchUiOpenOptions & ResttyPaneSearchUiCloseOptions,
+  ) => void;
+  isOpen: (paneId: number) => boolean;
+  getStyleOptions: () => Readonly<Required<ResttyManagedPaneSearchUiStyleOptions>>;
+  setStyleOptions: (options: ResttyManagedPaneSearchUiStyleOptions) => void;
+};
 
 /**
  * Public API surface exposed by each pane handle.
@@ -24,12 +43,23 @@ export type ResttyPaneApi = {
   getMouseStatus: () => ReturnType<InputHandler["getMouseStatus"]>;
   copySelectionToClipboard: () => Promise<boolean>;
   pasteFromClipboard: () => Promise<boolean>;
+  setSearchQuery: (query: string) => void;
+  clearSearch: () => void;
+  searchNext: () => void;
+  searchPrevious: () => void;
+  getSearchState: () => ResttySearchState;
+  openSearch: (options?: ResttyPaneSearchUiOpenOptions) => void;
+  closeSearch: (options?: ResttyPaneSearchUiCloseOptions) => void;
+  toggleSearch: (options?: ResttyPaneSearchUiOpenOptions & ResttyPaneSearchUiCloseOptions) => void;
+  isSearchOpen: () => boolean;
   dumpAtlasForCodepoint: (cp: number) => void;
   resize: (cols: number, rows: number) => void;
   focus: () => void;
   blur: () => void;
   updateSize: (force?: boolean) => void;
   getBackend: () => string;
+  getSearchUiStyleOptions: () => Readonly<Required<ResttyManagedPaneSearchUiStyleOptions>>;
+  setSearchUiStyleOptions: (options: ResttyManagedPaneSearchUiStyleOptions) => void;
   setShaderStages: (stages: ResttyShaderStage[]) => void;
   getShaderStages: () => ResttyShaderStage[];
   getRawPane: () => ResttyManagedAppPane;
@@ -42,9 +72,11 @@ export type ResttyPaneApi = {
  */
 export class ResttyPaneHandle implements ResttyPaneApi {
   private readonly resolvePane: () => ResttyManagedAppPane;
+  private readonly searchUiOps: PaneSearchUiHandleOps;
 
-  constructor(resolvePane: () => ResttyManagedAppPane) {
+  constructor(resolvePane: () => ResttyManagedAppPane, searchUiOps: PaneSearchUiHandleOps) {
     this.resolvePane = resolvePane;
+    this.searchUiOps = searchUiOps;
   }
 
   get id(): number {
@@ -115,6 +147,42 @@ export class ResttyPaneHandle implements ResttyPaneApi {
     return this.resolvePane().app.pasteFromClipboard();
   }
 
+  setSearchQuery(query: string): void {
+    this.resolvePane().app.setSearchQuery(query);
+  }
+
+  clearSearch(): void {
+    this.resolvePane().app.clearSearch();
+  }
+
+  searchNext(): void {
+    this.resolvePane().app.searchNext();
+  }
+
+  searchPrevious(): void {
+    this.resolvePane().app.searchPrevious();
+  }
+
+  getSearchState(): ResttySearchState {
+    return this.resolvePane().app.getSearchState();
+  }
+
+  openSearch(options?: ResttyPaneSearchUiOpenOptions): void {
+    this.searchUiOps.open(this.id, options);
+  }
+
+  closeSearch(options?: ResttyPaneSearchUiCloseOptions): void {
+    this.searchUiOps.close(this.id, options);
+  }
+
+  toggleSearch(options?: ResttyPaneSearchUiOpenOptions & ResttyPaneSearchUiCloseOptions): void {
+    this.searchUiOps.toggle(this.id, options);
+  }
+
+  isSearchOpen(): boolean {
+    return this.searchUiOps.isOpen(this.id);
+  }
+
   dumpAtlasForCodepoint(cp: number): void {
     this.resolvePane().app.dumpAtlasForCodepoint(cp);
   }
@@ -137,6 +205,14 @@ export class ResttyPaneHandle implements ResttyPaneApi {
 
   getBackend(): string {
     return this.resolvePane().app.getBackend();
+  }
+
+  getSearchUiStyleOptions(): Readonly<Required<ResttyManagedPaneSearchUiStyleOptions>> {
+    return this.searchUiOps.getStyleOptions();
+  }
+
+  setSearchUiStyleOptions(options: ResttyManagedPaneSearchUiStyleOptions): void {
+    this.searchUiOps.setStyleOptions(options);
   }
 
   setShaderStages(stages: ResttyShaderStage[]): void {

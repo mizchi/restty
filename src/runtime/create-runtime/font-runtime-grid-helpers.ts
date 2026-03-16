@@ -21,6 +21,7 @@ type CreateFontRuntimeGridHelpersOptions = {
   getWasmHandle: () => number;
   ptyTransport: PtyTransport;
   setNeedsRender: () => void;
+  markSearchDirty?: () => void;
   shapeClusterWithFont: (entry: FontEntry, text: string) => { advance: number };
 };
 
@@ -40,6 +41,7 @@ export function createFontRuntimeGridHelpers(options: CreateFontRuntimeGridHelpe
     getWasmHandle,
     ptyTransport,
     setNeedsRender,
+    markSearchDirty,
     shapeClusterWithFont,
   } = options;
 
@@ -69,6 +71,7 @@ export function createFontRuntimeGridHelpers(options: CreateFontRuntimeGridHelpe
     if (wasmReady && wasm && wasmHandle) {
       wasm.resize(wasmHandle, cols, rows);
       wasm.renderUpdate(wasmHandle);
+      markSearchDirty?.();
     }
     if (ptyTransport.isConnected()) {
       ptyTransport.resize(cols, rows, {

@@ -87,6 +87,7 @@ export type CreateRuntimeInteractionOptions = {
   getWasmExports: () => ResttyWasmExports | null;
   updateLinkHover: (cell: RuntimeCell | null) => void;
   markNeedsRender: () => void;
+  markSearchDirty?: () => void;
 };
 
 export type RuntimeInteraction = {

@@ -790,6 +790,7 @@ function updatePaneUi(id: number, update: (state: PaneState) => void) {
   const pane = restty.getPaneById(id);
   if (!pane) return;
   renderActivePaneStatus(pane, state);
+  renderActivePaneControls(pane, state);
 }
 
 function setPanePaused(id: number, value: boolean) {
@@ -921,6 +922,18 @@ restty = new Restty({
   onDesktopNotification: handleDesktopNotification,
   paneStyles: {
     inactivePaneOpacity: 0.9,
+  },
+  searchUi: {
+    styles: {
+      offsetTopPx: 14,
+      offsetRightPx: 14,
+      maxWidthPx: 400,
+      borderRadiusPx: 14,
+      panelBackground: "rgba(14, 14, 14, 0.92)",
+      panelBorderColor: "rgba(255, 255, 255, 0.14)",
+      buttonHoverBackground: "rgba(255, 255, 255, 0.18)",
+      statusActiveTextColor: "#e0bc72",
+    },
   },
   appOptions: ({ id, sourcePane }) => {
     const paneState = createPaneState(id, sourcePane);

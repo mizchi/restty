@@ -33,6 +33,14 @@ export type {
   ResttyOutputInterceptorPayload,
   ResttyRenderStageHandle,
 } from "./surface/restty";
+export type {
+  ResttyManagedPaneSearchUiOptions,
+  ResttyManagedPaneSearchUiStyleOptions,
+} from "./surface/pane-app-manager";
+export type {
+  ResttyPaneSearchUiOpenOptions,
+  ResttyPaneSearchUiCloseOptions,
+} from "./surface/pane-search-ui";
 
 export {
   getBuiltinTheme,

@@ -1,9 +1,16 @@
 import type { FontEntry, FontManagerState } from "../../fonts";
 import type { NerdConstraint } from "../../fonts/nerd-constraints";
 import type { Color, WebGPUState } from "../../renderer";
+import type { RuntimeTerminalColor } from "./highlight-terminal-color-utils";
 import type { CompiledWebGPUShaderStage, WebGPUStageTargets } from "../create-app-types";
 import type { GlyphConstraintMeta } from "../atlas-builder";
-import type { KittyPlacement, RenderState, ResttyWasm, ResttyWasmExports } from "../../wasm";
+import type {
+  KittyPlacement,
+  RenderState,
+  ResttyWasm,
+  ResttyWasmExports,
+  SearchViewportMatch,
+} from "../../wasm";
 import type { KittyDrawPlan, KittyDrawSlice } from "./kitty-render-runtime";
 import type { ResttyFontHintTarget } from "../types";
 
@@ -126,6 +133,7 @@ export type SharedTickDeps = {
   nerdIconScale: number;
   selectionState: { active: boolean; dragging: boolean };
   selectionForRow: (row: number, cols: number) => { start: number; end: number } | null;
+  getSearchViewportMatches: () => readonly SearchViewportMatch[];
   pushRect: (
     target: number[],
     x: number,
@@ -142,7 +150,12 @@ export type SharedTickDeps = {
     height: number,
     color: Color,
   ) => void;
-  selectionColor: Color;
+  selectionBackgroundColor: RuntimeTerminalColor;
+  selectionForegroundColor: RuntimeTerminalColor | null;
+  searchMatchBackgroundColor: RuntimeTerminalColor;
+  searchCurrentMatchBackgroundColor: RuntimeTerminalColor;
+  searchMatchTextColor: RuntimeTerminalColor;
+  searchCurrentMatchTextColor: RuntimeTerminalColor;
   STYLE_BOLD: number;
   STYLE_ITALIC: number;
   STYLE_FAINT: number;

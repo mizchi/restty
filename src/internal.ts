@@ -203,8 +203,14 @@ export type {
   ResttyPaneDomDefaults,
   ResttyManagedPaneStyleOptions,
   ResttyManagedPaneStylesOptions,
+  ResttyManagedPaneSearchUiOptions,
+  ResttyManagedPaneSearchUiStyleOptions,
   ResttyPaneAppOptionsInput,
 } from "./surface/pane-app-manager";
+export type {
+  ResttyPaneSearchUiOpenOptions,
+  ResttyPaneSearchUiCloseOptions,
+} from "./surface/pane-search-ui";
 export type {
   ResttyFontHintTarget,
   ResttyFontSource,

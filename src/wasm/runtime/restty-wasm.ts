@@ -9,12 +9,16 @@ import type {
   RenderViewCache,
   ResttyWasmExports,
   ResttyWasmOptions,
+  SearchStatus,
+  SearchViewportMatch,
   WasmAbi,
 } from "./types";
 import { makeRenderViewCache } from "./view-cache";
 
 const textDecoder = new TextDecoder();
 const textEncoder = new TextEncoder();
+const SEARCH_STATUS_BYTES = 16;
+const SEARCH_VIEWPORT_MATCH_BYTES = 8;
 
 const requiredWasmExports = [
   "memory",
@@ -138,6 +142,90 @@ export class ResttyWasm {
   getKittyKeyboardFlags(handle: number): number {
     if (!this.exports.restty_kitty_keyboard_flags) return 0;
     return this.exports.restty_kitty_keyboard_flags(handle) >>> 0;
+  }
+
+  /** Set the active terminal search query. */
+  setSearchQuery(handle: number, query: string): void {
+    if (!this.exports.restty_search_set_query) return;
+    const bytes = textEncoder.encode(query);
+    if (!bytes.length) {
+      this.clearSearch(handle);
+      return;
+    }
+    const ptr = this.exports.restty_alloc(bytes.length);
+    if (!ptr) return;
+    const view = new Uint8Array(this.memory.buffer, ptr, bytes.length);
+    view.set(bytes);
+    this.exports.restty_search_set_query(handle, ptr, bytes.length);
+    this.exports.restty_free(ptr, bytes.length);
+  }
+
+  /** Clear the active terminal search query and results. */
+  clearSearch(handle: number): void {
+    if (!this.exports.restty_search_clear) return;
+    this.exports.restty_search_clear(handle);
+  }
+
+  /** Advance terminal search work by a bounded budget. */
+  stepSearch(handle: number, budget: number): void {
+    if (!this.exports.restty_search_step) return;
+    this.exports.restty_search_step(handle, Math.max(0, Math.floor(budget)));
+  }
+
+  /** Select the next search match. */
+  searchNext(handle: number): void {
+    if (!this.exports.restty_search_select_next) return;
+    this.exports.restty_search_select_next(handle);
+  }
+
+  /** Select the previous search match. */
+  searchPrevious(handle: number): void {
+    if (!this.exports.restty_search_select_prev) return;
+    this.exports.restty_search_select_prev(handle);
+  }
+
+  /** Get the current terminal search status. */
+  getSearchStatus(handle: number): SearchStatus {
+    const ptr = this.exports.restty_search_status_ptr?.(handle) ?? 0;
+    if (!ptr) {
+      return {
+        active: false,
+        pending: false,
+        complete: false,
+        generation: 0,
+        totalMatches: 0,
+        selectedIndex: null,
+      };
+    }
+    const view = new DataView(this.memory.buffer, ptr, SEARCH_STATUS_BYTES);
+    const selectedIndex = view.getInt32(12, true);
+    return {
+      active: view.getUint8(0) !== 0,
+      pending: view.getUint8(1) !== 0,
+      complete: view.getUint8(2) !== 0,
+      generation: view.getUint32(4, true),
+      totalMatches: view.getUint32(8, true),
+      selectedIndex: selectedIndex >= 0 ? selectedIndex : null,
+    };
+  }
+
+  /** Get visible search-highlight spans for the current viewport. */
+  getSearchViewportMatches(handle: number): SearchViewportMatch[] {
+    const count = this.exports.restty_search_viewport_match_count?.(handle) ?? 0;
+    const ptr = this.exports.restty_search_viewport_matches_ptr?.(handle) ?? 0;
+    if (!count || !ptr) return [];
+    const view = new DataView(this.memory.buffer, ptr, count * SEARCH_VIEWPORT_MATCH_BYTES);
+    const matches: SearchViewportMatch[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const offset = i * SEARCH_VIEWPORT_MATCH_BYTES;
+      matches.push({
+        row: view.getUint16(offset, true),
+        startCol: view.getUint16(offset + 2, true),
+        endCol: view.getUint16(offset + 4, true),
+        selected: view.getUint8(offset + 6) !== 0,
+      });
+    }
+    return matches;
   }
 
   /** Get all active Kitty graphics placements. */

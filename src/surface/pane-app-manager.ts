@@ -10,7 +10,15 @@ import { createDefaultResttyPaneContextMenuItems } from "./panes/default-context
 import { createResttyPaneManager } from "./panes/manager";
 import { getDefaultResttyAppSession } from "../runtime/session";
 import { createResttyApp } from "./app-factory";
-import type { ResttyAppOptions, ResttyAppSession } from "../runtime/types";
+import type { ResttyAppCallbacks, ResttyAppOptions, ResttyAppSession } from "../runtime/types";
+import {
+  createPaneSearchUiController,
+  type PaneSearchUiController,
+  type ResttyPaneSearchUiCloseOptions,
+  type ResttyPaneSearchUiOpenOptions,
+  type ResttyPaneSearchUiOptions,
+  type ResttyPaneSearchUiStyleOptions,
+} from "./pane-search-ui";
 
 /**
  * A pane created by the app pane manager, extending the base pane
@@ -39,9 +47,25 @@ export type ResttyPaneDomDefaults = {
 export type ResttyManagedPaneStyleOptions = ResttyPaneStyleOptions;
 /** Style configuration including enabled flag (alias for ResttyPaneStylesOptions). */
 export type ResttyManagedPaneStylesOptions = ResttyPaneStylesOptions;
+/** Style configuration for the built-in pane search UI. */
+export type ResttyManagedPaneSearchUiStyleOptions = ResttyPaneSearchUiStyleOptions;
+/** Built-in pane search UI configuration. */
+export type ResttyManagedPaneSearchUiOptions = ResttyPaneSearchUiOptions;
 
 /** App options minus the DOM/session fields that the pane manager provides. */
 export type ResttyPaneAppOptionsInput = Omit<ResttyAppOptions, "canvas" | "imeInput" | "session">;
+
+export type ResttyAppPaneManager = ResttyPaneManager<ResttyManagedAppPane> & {
+  openPaneSearch: (id: number, options?: ResttyPaneSearchUiOpenOptions) => void;
+  closePaneSearch: (id: number, options?: ResttyPaneSearchUiCloseOptions) => void;
+  togglePaneSearch: (
+    id: number,
+    options?: ResttyPaneSearchUiOpenOptions & ResttyPaneSearchUiCloseOptions,
+  ) => void;
+  isPaneSearchOpen: (id: number) => boolean;
+  getSearchUiStyleOptions: () => Readonly<Required<ResttyPaneSearchUiStyleOptions>>;
+  setSearchUiStyleOptions: (options: ResttyPaneSearchUiStyleOptions) => void;
+};
 
 /**
  * Configuration for the built-in default context menu.
@@ -84,6 +108,8 @@ export type CreateResttyAppPaneManagerOptions = {
   minPaneSize?: number;
   /** Enable or configure built-in pane CSS styles. */
   paneStyles?: boolean | ResttyManagedPaneStylesOptions;
+  /** Enable or configure the built-in pane search UI. */
+  searchUi?: boolean | ResttyManagedPaneSearchUiOptions;
   /** Enable or configure keyboard shortcuts for splitting. */
   shortcuts?: boolean | ResttyPaneShortcutsOptions;
   /** Custom context menu implementation (overrides defaultContextMenu). */
@@ -146,7 +172,7 @@ function defaultInputTargetPredicate(target: HTMLElement): boolean {
  */
 export function createResttyAppPaneManager(
   options: CreateResttyAppPaneManagerOptions,
-): ResttyPaneManager<ResttyManagedAppPane> {
+): ResttyAppPaneManager {
   const session = options.session ?? getDefaultResttyAppSession();
   const autoInit = options.autoInit ?? true;
 
@@ -195,7 +221,26 @@ export function createResttyAppPaneManager(
     };
   }
 
-  const manager = createResttyPaneManager<ResttyManagedAppPane>({
+  let manager: ResttyPaneManager<ResttyManagedAppPane>;
+  const searchUiConfig =
+    typeof options.searchUi === "object" && options.searchUi ? options.searchUi : undefined;
+  const searchUiController: PaneSearchUiController = createPaneSearchUiController({
+    root: options.root,
+    enabled: options.searchUi === false ? false : (searchUiConfig?.enabled ?? true),
+    placeholder: searchUiConfig?.placeholder,
+    previousButtonText: searchUiConfig?.previousButtonText,
+    nextButtonText: searchUiConfig?.nextButtonText,
+    clearButtonText: searchUiConfig?.clearButtonText,
+    closeButtonText: searchUiConfig?.closeButtonText,
+    statusFormatter: searchUiConfig?.statusFormatter,
+    shortcut: searchUiConfig?.shortcut,
+    styles: searchUiConfig?.styles,
+    getPaneById: (paneId) => manager.getPaneById(paneId),
+    getActivePane: () => manager.getActivePane(),
+    getFocusedPane: () => manager.getFocusedPane(),
+  });
+
+  manager = createResttyPaneManager<ResttyManagedAppPane>({
     root: options.root,
     minPaneSize: options.minPaneSize,
     styles: options.paneStyles,
@@ -226,6 +271,13 @@ export function createResttyAppPaneManager(
         ...baseOptions.elements,
         termDebugEl: baseOptions.elements?.termDebugEl ?? termDebugEl,
       };
+      const mergedCallbacks: ResttyAppCallbacks = {
+        ...baseOptions.callbacks,
+        onSearchState: (state) => {
+          baseOptions.callbacks?.onSearchState?.(state);
+          searchUiController.handleSearchState(id, state);
+        },
+      };
 
       const app = createResttyApp({
         ...baseOptions,
@@ -233,13 +285,14 @@ export function createResttyAppPaneManager(
         imeInput,
         session,
         elements: mergedElements,
+        callbacks: mergedCallbacks,
       });
 
       if (autoInit) {
         void app.init();
       }
 
-      return {
+      const pane = {
         id,
         container,
         focusTarget: canvas,
@@ -248,18 +301,46 @@ export function createResttyAppPaneManager(
         imeInput,
         termDebugEl,
       };
+      searchUiController.registerPane(pane);
+
+      return pane;
     },
     destroyPane: (pane) => {
+      searchUiController.unregisterPane(pane.id);
       pane.app.destroy();
     },
     onPaneCreated: options.onPaneCreated,
     onPaneClosed: options.onPaneClosed,
     onPaneSplit: options.onPaneSplit,
-    onActivePaneChange: options.onActivePaneChange,
+    onActivePaneChange: (pane) => {
+      searchUiController.handleActivePaneChange(pane?.id ?? null);
+      options.onActivePaneChange?.(pane);
+    },
     onLayoutChanged: () => {
       options.onLayoutChanged?.();
     },
   });
+  const destroy = () => {
+    searchUiController.destroy();
+    manager.destroy();
+  };
 
-  return manager;
+  return {
+    ...manager,
+    openPaneSearch: (id, config) => {
+      searchUiController.open(id, config);
+    },
+    closePaneSearch: (id, config) => {
+      searchUiController.close(id, config);
+    },
+    togglePaneSearch: (id, config) => {
+      searchUiController.toggle(id, config);
+    },
+    isPaneSearchOpen: (id) => searchUiController.isOpen(id),
+    getSearchUiStyleOptions: () => searchUiController.getStyleOptions(),
+    setSearchUiStyleOptions: (next) => {
+      searchUiController.setStyleOptions(next);
+    },
+    destroy,
+  };
 }

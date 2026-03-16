@@ -1,4 +1,9 @@
 import type { WebGLTickContext } from "./render-tick-webgl-context";
+import {
+  resolveHighlightBackgroundColor,
+  resolveHighlightForegroundColor,
+} from "./highlight-terminal-color-utils";
+import { searchHighlightForColumn } from "./search-highlight-utils";
 
 export function populateWebGLSceneData(ctx: WebGLTickContext) {
   const {
@@ -43,8 +48,14 @@ export function populateWebGLSceneData(ctx: WebGLTickContext) {
     defaultBg,
     selectionState,
     selectionForRow,
+    getSearchViewportMatches,
     pushRect,
-    selectionColor,
+    selectionBackgroundColor,
+    selectionForegroundColor,
+    searchMatchBackgroundColor,
+    searchCurrentMatchBackgroundColor,
+    searchMatchTextColor,
+    searchCurrentMatchTextColor,
     STYLE_BOLD,
     STYLE_ITALIC,
     STYLE_FAINT,
@@ -85,6 +96,8 @@ export function populateWebGLSceneData(ctx: WebGLTickContext) {
   } = deps;
 
   const isRegionalIndicator = (value: number) => value >= 0x1f1e6 && value <= 0x1f1ff;
+  const searchMatches = getSearchViewportMatches();
+  let searchMatchIndex = 0;
 
   const cursorBlock = cursorStyle === 0 && !!cursorCell;
   for (let row = 0; row < rows; row += 1) {
@@ -93,11 +106,18 @@ export function populateWebGLSceneData(ctx: WebGLTickContext) {
     const localSel = selectionState.active ? selectionForRow(row, cols) : null;
     const selStart = localSel?.start ?? -1;
     const selEnd = localSel?.end ?? -1;
-    if (selStart >= 0 && selEnd > selStart) {
-      const start = Math.max(0, selStart);
-      const end = Math.min(cols, selEnd);
-      pushRect(selectionData, start * cellW, rowY, (end - start) * cellW, cellH, selectionColor);
+    const rowSearchStartIndex = searchMatchIndex;
+    while (searchMatchIndex < searchMatches.length) {
+      const match = searchMatches[searchMatchIndex]!;
+      if (match.row < row) {
+        searchMatchIndex += 1;
+        continue;
+      }
+      if (match.row > row) break;
+      searchMatchIndex += 1;
     }
+    const rowSearchEndIndex = searchMatchIndex;
+    let rowSearchCursor = rowSearchStartIndex;
 
     for (let col = 0; col < cols; col += 1) {
       const idx = row * cols + col;
@@ -136,6 +156,58 @@ export function populateWebGLSceneData(ctx: WebGLTickContext) {
       if (faint) {
         fg = fade(fg, FAINT_ALPHA);
         ul = fade(ul, FAINT_ALPHA);
+      }
+
+      const selectionActiveForCell = selStart >= 0 && col >= selStart && col < selEnd;
+      let searchHighlightKind = 0;
+      if (!selectionActiveForCell && rowSearchCursor < rowSearchEndIndex) {
+        const searchHighlight = searchHighlightForColumn(
+          searchMatches,
+          rowSearchCursor,
+          rowSearchEndIndex,
+          col,
+          cols,
+        );
+        rowSearchCursor = searchHighlight.nextIndex;
+        searchHighlightKind = searchHighlight.kind;
+      }
+
+      if (selectionActiveForCell) {
+        const selectionBg = resolveHighlightBackgroundColor(
+          selectionBackgroundColor,
+          fg,
+          bg,
+          inverse,
+        );
+        pushRect(selectionData, x, rowY, cellW, cellH, selectionBg);
+        if (selectionForegroundColor) {
+          const selectionFg = resolveHighlightForegroundColor(
+            selectionForegroundColor,
+            fg,
+            bg,
+            inverse,
+          );
+          fg = selectionFg;
+          ul = selectionFg;
+        }
+      } else if (searchHighlightKind === 1 || searchHighlightKind === 2) {
+        const searchBg = resolveHighlightBackgroundColor(
+          searchHighlightKind === 2
+            ? searchCurrentMatchBackgroundColor
+            : searchMatchBackgroundColor,
+          fg,
+          bg,
+          inverse,
+        );
+        const searchFg = resolveHighlightForegroundColor(
+          searchHighlightKind === 2 ? searchCurrentMatchTextColor : searchMatchTextColor,
+          fg,
+          bg,
+          inverse,
+        );
+        pushRect(selectionData, x, rowY, cellW, cellH, searchBg);
+        fg = searchFg;
+        ul = searchFg;
       }
 
       const bgForText =

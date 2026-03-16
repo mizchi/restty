@@ -21,6 +21,7 @@ export function createRuntimeFontRuntimeHelpers(options: CreateRuntimeFontRuntim
     getWasmHandle,
     ptyTransport,
     setNeedsRender,
+    markSearchDirty,
     getFontHinting,
     getFontHintTarget,
     fontScaleOverrides,
@@ -66,6 +67,7 @@ export function createRuntimeFontRuntimeHelpers(options: CreateRuntimeFontRuntim
     getWasmHandle,
     ptyTransport,
     setNeedsRender,
+    markSearchDirty,
     shapeClusterWithFont: textHelpers.shapeClusterWithFont,
   });
 

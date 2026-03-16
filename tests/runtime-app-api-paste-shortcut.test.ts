@@ -180,7 +180,8 @@ function createHarness(
     destroyWebGPUStageTargets: () => undefined,
     clearWebGLShaderStages: () => undefined,
     destroyWebGLStageTargets: () => undefined,
-    resetTerminalResizeScheduler: () => undefined,
+    markSearchDirty: () => undefined,
+    handleSearchWasmReset: () => undefined,
   });
 
   const restoreGlobals = () => {

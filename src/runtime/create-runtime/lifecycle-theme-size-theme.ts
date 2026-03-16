@@ -1,4 +1,5 @@
 import { colorToFloats, colorToRgbU32, type GhosttyTheme } from "../../theme";
+import { runtimeTerminalColorFromTheme } from "./highlight-terminal-color-utils";
 import type { LifecycleThemeSizeDeps } from "./lifecycle-theme-size.types";
 
 export function createLifecycleThemeHandlers(deps: LifecycleThemeSizeDeps) {
@@ -6,16 +7,41 @@ export function createLifecycleThemeHandlers(deps: LifecycleThemeSizeDeps) {
     if (!theme) return;
 
     if (theme.colors.background) {
-      deps.setDefaultBg(colorToFloats(theme.colors.background, 1));
+      deps.setDefaultBg(colorToFloats(theme.colors.background, 255));
     }
     if (theme.colors.foreground) {
-      deps.setDefaultFg(colorToFloats(theme.colors.foreground, 1));
+      deps.setDefaultFg(colorToFloats(theme.colors.foreground, 255));
     }
     if (theme.colors.selectionBackground) {
-      deps.setSelectionColor(colorToFloats(theme.colors.selectionBackground));
+      deps.setSelectionBackgroundColor(
+        runtimeTerminalColorFromTheme(theme.colors.selectionBackground),
+      );
+    }
+    if (theme.colors.selectionForeground) {
+      deps.setSelectionForegroundColor(
+        runtimeTerminalColorFromTheme(theme.colors.selectionForeground),
+      );
+    }
+    if (theme.colors.searchBackground) {
+      deps.setSearchMatchBackgroundColor(
+        runtimeTerminalColorFromTheme(theme.colors.searchBackground),
+      );
+    }
+    if (theme.colors.searchForeground) {
+      deps.setSearchMatchTextColor(runtimeTerminalColorFromTheme(theme.colors.searchForeground));
+    }
+    if (theme.colors.searchSelectedBackground) {
+      deps.setSearchCurrentMatchBackgroundColor(
+        runtimeTerminalColorFromTheme(theme.colors.searchSelectedBackground),
+      );
+    }
+    if (theme.colors.searchSelectedForeground) {
+      deps.setSearchCurrentMatchTextColor(
+        runtimeTerminalColorFromTheme(theme.colors.searchSelectedForeground),
+      );
     }
     if (theme.colors.cursor) {
-      deps.setCursorFallback(colorToFloats(theme.colors.cursor, 1));
+      deps.setCursorFallback(colorToFloats(theme.colors.cursor, 255));
     }
 
     deps.setActiveTheme(theme);
@@ -63,7 +89,12 @@ export function createLifecycleThemeHandlers(deps: LifecycleThemeSizeDeps) {
   function resetTheme() {
     deps.setDefaultBg([...deps.defaultBgBase]);
     deps.setDefaultFg([...deps.defaultFgBase]);
-    deps.setSelectionColor([...deps.selectionBase]);
+    deps.setSelectionBackgroundColor(deps.selectionBackgroundBase);
+    deps.setSelectionForegroundColor(deps.selectionForegroundBase);
+    deps.setSearchMatchBackgroundColor(deps.searchMatchBackgroundBase);
+    deps.setSearchCurrentMatchBackgroundColor(deps.searchCurrentMatchBackgroundBase);
+    deps.setSearchMatchTextColor(deps.searchMatchTextBase);
+    deps.setSearchCurrentMatchTextColor(deps.searchCurrentMatchTextBase);
     deps.setCursorFallback([...deps.cursorBase]);
     deps.setActiveTheme(null);
 

@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import {
   DEFAULT_IME_FONT_FAMILY,
+  PREEDIT_ACTIVE_BG,
+  PREEDIT_BG,
   resolveImeAnchor,
   syncImeInputTypography,
   updateImePosition,
@@ -67,4 +69,9 @@ test("updateImePosition writes absolute left/top for IME anchor", () => {
   expect(imeInput.style.transform).toBe("none");
   expect(imeInput.style.left).toBe("160px");
   expect(imeInput.style.top).toBe("260px");
+});
+
+test("preedit overlay backgrounds stay opaque for readability", () => {
+  expect(PREEDIT_BG[3]).toBe(1);
+  expect(PREEDIT_ACTIVE_BG[3]).toBe(1);
 });

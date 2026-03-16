@@ -136,10 +136,10 @@ export function syncImeInputTypography(
   imeInput.style.letterSpacing = "0";
 }
 
-/** Default RGBA background color for the preedit overlay. */
-export const PREEDIT_BG = [0.16, 0.16, 0.2, 0.9] as const;
-/** Default RGBA background color for the active (selected) preedit segment. */
-export const PREEDIT_ACTIVE_BG = [0.3, 0.32, 0.42, 0.95] as const;
+/** Default RGBA background color for the preedit overlay. Keep alpha opaque for readability. */
+export const PREEDIT_BG = [0.16, 0.16, 0.2, 1.0] as const;
+/** Default RGBA background color for the active (selected) preedit segment. Keep alpha opaque. */
+export const PREEDIT_ACTIVE_BG = [0.3, 0.32, 0.42, 1.0] as const;
 /** Default RGBA foreground color for preedit text. */
 export const PREEDIT_FG = [0.95, 0.95, 0.98, 1.0] as const;
 /** Default RGBA color for the preedit underline. */

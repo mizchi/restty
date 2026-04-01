@@ -221,10 +221,16 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
         ? true
         : now - nextShared.lastRenderTime >= 1000 / targetRenderFps;
       if (nextShared.needsRender && renderBudget) {
-        if (internalState.backend === "webgpu" && "device" in state) tickWebGPU(state);
-        if (internalState.backend === "webgl2" && "gl" in state) tickWebGL(state);
-        writeState({ lastRenderTime: now, needsRender: false });
-        updateFps();
+        // Skip render if wasm or font not ready yet — avoids black flash
+        // during initial load. needsRender stays true so next tick retries.
+        if (!nextShared.wasmReady) {
+          // Do nothing — keep needsRender true for retry
+        } else {
+          if (internalState.backend === "webgpu" && "device" in state) tickWebGPU(state);
+          if (internalState.backend === "webgl2" && "gl" in state) tickWebGL(state);
+          writeState({ lastRenderTime: now, needsRender: false });
+          updateFps();
+        }
       }
     }
     internalState.rafId = requestAnimationFrame(() => loop(state));

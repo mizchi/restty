@@ -66,8 +66,10 @@ export function bindImeEvents(options: BindImeEventsOptions) {
     setPreedit("", true);
     imeState.selectionStart = 0;
     imeState.selectionEnd = 0;
-    const text = event.data || "";
-    if (text) {
+    // Some browsers (notably older WebKit) may deliver empty event.data
+    // on compositionend; fall back to the IME textarea value.
+    const text = event.data || imeInput.value || "";
+    if (text && getWasmReady() && getWasmHandle()) {
       suppressNextInput = true;
       sendKeyInput(text);
     }

@@ -51,6 +51,21 @@
       "types": "./dist/xterm.d.ts",
       "import": "./dist/xterm.js",
       "default": "./dist/xterm.js"
+    },
+    "./esm": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/restty.esm.js",
+      "default": "./dist/restty.esm.js"
+    },
+    "./esm/internal": {
+      "types": "./dist/internal.d.ts",
+      "import": "./dist/internal.esm.js",
+      "default": "./dist/internal.esm.js"
+    },
+    "./esm/xterm": {
+      "types": "./dist/xterm.d.ts",
+      "import": "./dist/xterm.esm.js",
+      "default": "./dist/xterm.esm.js"
     }
   },
   "scripts": {
@@ -59,8 +74,9 @@
     "build:themes": "bun run scripts/generate-builtin-themes.ts",
     "build:wasm": "bun run scripts/build-wasm.ts",
     "build:lib": "bun run scripts/build-lib.ts",
+    "build:esm": "bun run scripts/build-esm.ts",
     "build:types": "tsc -p tsconfig.build.json",
-    "build": "bun run build:themes && bun run clean:dist && bun run build:lib && bun run build:types",
+    "build": "bun run build:themes && bun run clean:dist && bun run build:lib && bun run build:esm && bun run build:types",
     "build:playground-app": "bun run playground/build-playground-app.ts",
     "build:assets": "bun run build:playground-app",
     "check:themes": "bun run build:themes && git diff --exit-code -- src/theme/builtin-themes.ts",

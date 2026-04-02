@@ -140,6 +140,9 @@ test("bindPointerEvents routes primary click to app mouse when mouse reporting i
     pendingPointerId: null,
     pendingCell: null,
     startedWithActiveSelection: false,
+    lastPrimaryClickAt: 0,
+    lastPrimaryClickCell: null,
+    lastPrimaryClickCount: 0,
   };
 
   bindPointerEvents({
@@ -217,6 +220,9 @@ test("bindPointerEvents keeps Shift+click as local selection bypass", () => {
     pendingPointerId: null as number | null,
     pendingCell: null as { row: number; col: number } | null,
     startedWithActiveSelection: false,
+    lastPrimaryClickAt: 0,
+    lastPrimaryClickCell: null as { row: number; col: number } | null,
+    lastPrimaryClickCount: 0,
   };
 
   bindPointerEvents({
@@ -323,6 +329,9 @@ test("bindPointerEvents routes mouse when reporting is active even outside alt-s
       pendingPointerId: null,
       pendingCell: null,
       startedWithActiveSelection: false,
+      lastPrimaryClickAt: 0,
+      lastPrimaryClickCell: null,
+      lastPrimaryClickCount: 0,
     },
     linkState: { hoverId: 0, hoverUri: "" },
     cleanupCanvasFns: [],
@@ -385,6 +394,9 @@ test("bindPointerEvents keeps Shift+contextmenu as local bypass", () => {
       pendingPointerId: null,
       pendingCell: null,
       startedWithActiveSelection: false,
+      lastPrimaryClickAt: 0,
+      lastPrimaryClickCell: null,
+      lastPrimaryClickCount: 0,
     },
     linkState: { hoverId: 0, hoverUri: "" },
     cleanupCanvasFns: [],
@@ -452,6 +464,9 @@ test("bindPointerEvents routes wheel through native-host scroll handler", () => 
       pendingPointerId: null,
       pendingCell: null,
       startedWithActiveSelection: false,
+      lastPrimaryClickAt: 0,
+      lastPrimaryClickCell: null,
+      lastPrimaryClickCount: 0,
     },
     linkState: { hoverId: 0, hoverUri: "" },
     cleanupCanvasFns: [],
@@ -481,4 +496,175 @@ test("bindPointerEvents routes wheel through native-host scroll handler", () => 
   canvas.emit("wheel", wheel.event as unknown as Event);
   expect(wheelCalls).toBe(1);
   expect(wheel.prevented()).toBe(true);
+});
+
+test("bindPointerEvents uses double-click to trigger word selection", () => {
+  const canvas = new FakeCanvas();
+  const selectedCells: Array<{ row: number; col: number }> = [];
+  const desktopSelectionState = {
+    pendingPointerId: null as number | null,
+    pendingCell: null as { row: number; col: number } | null,
+    startedWithActiveSelection: false,
+    lastPrimaryClickAt: 0,
+    lastPrimaryClickCell: null as { row: number; col: number } | null,
+    lastPrimaryClickCount: 0,
+  };
+
+  bindPointerEvents({
+    canvas: canvas as unknown as HTMLCanvasElement,
+    bindOptions: {
+      inputHandler: createInputHandlerStub({
+        mouseActive: false,
+        sendMouseEvent: () => false,
+      }),
+      sendKeyInput: () => {},
+      sendPasteText: () => {},
+      sendPastePayloadFromDataTransfer: () => false,
+      getLastKeydownSeq: () => "",
+      getLastKeydownSeqAt: () => 0,
+      keydownBeforeinputDedupeMs: 80,
+      openLink: () => {},
+    },
+    touchSelectionMode: "off",
+    touchSelectionLongPressMs: 450,
+    touchSelectionMoveThresholdPx: 10,
+    selectionState: { active: false, dragging: false, anchor: null, focus: null },
+    touchSelectionState: {
+      pendingPointerId: null,
+      activePointerId: null,
+      panPointerId: null,
+      pendingCell: null,
+      pendingStartedAt: 0,
+      pendingStartX: 0,
+      pendingStartY: 0,
+      panLastY: 0,
+      pendingTimer: 0,
+    },
+    desktopSelectionState,
+    linkState: { hoverId: 0, hoverUri: "https://example.com" },
+    cleanupCanvasFns: [],
+    isTouchPointer: (event) => event.pointerType === "touch",
+    clearPendingTouchSelection: () => {},
+    clearPendingDesktopSelection: () => {
+      desktopSelectionState.pendingPointerId = null;
+      desktopSelectionState.pendingCell = null;
+      desktopSelectionState.startedWithActiveSelection = false;
+    },
+    tryActivatePendingTouchSelection: () => false,
+    beginSelectionDrag: () => {},
+    selectWordAtCell: (cell) => {
+      selectedCells.push(cell);
+      return true;
+    },
+    normalizeSelectionCell: (cell) => cell,
+    positionToCell: () => ({ row: 2, col: 9 }),
+    scrollViewportByLines: () => {},
+    clearSelection: () => {},
+    updateCanvasCursor: () => {},
+    markNeedsRender: () => {},
+    updateLinkHover: () => {},
+    getGridState: () => ({ cols: 80, rows: 24, cellW: 10, cellH: 20 }),
+    getWasmReady: () => true,
+    getWasmHandle: () => 1,
+  });
+
+  canvas.emit("pointerup", createPointerEvent({ button: 0, pointerId: 4 }).event as unknown as Event);
+  const secondUp = createPointerEvent({ button: 0, pointerId: 4 });
+  canvas.emit("pointerup", secondUp.event as unknown as Event);
+
+  expect(secondUp.prevented()).toBe(true);
+  expect(selectedCells).toEqual([{ row: 2, col: 9 }]);
+});
+
+test("bindPointerEvents uses triple-click to trigger line selection", () => {
+  const canvas = new FakeCanvas();
+  const wordCells: Array<{ row: number; col: number }> = [];
+  const lineCells: Array<{ row: number; col: number }> = [];
+  const selectionState = { active: false, dragging: false, anchor: null, focus: null };
+  const desktopSelectionState = {
+    pendingPointerId: null as number | null,
+    pendingCell: null as { row: number; col: number } | null,
+    startedWithActiveSelection: false,
+    lastPrimaryClickAt: 0,
+    lastPrimaryClickCell: null as { row: number; col: number } | null,
+    lastPrimaryClickCount: 0,
+  };
+
+  bindPointerEvents({
+    canvas: canvas as unknown as HTMLCanvasElement,
+    bindOptions: {
+      inputHandler: createInputHandlerStub({
+        mouseActive: false,
+        sendMouseEvent: () => false,
+      }),
+      sendKeyInput: () => {},
+      sendPasteText: () => {},
+      sendPastePayloadFromDataTransfer: () => false,
+      getLastKeydownSeq: () => "",
+      getLastKeydownSeqAt: () => 0,
+      keydownBeforeinputDedupeMs: 80,
+      openLink: () => {},
+    },
+    touchSelectionMode: "off",
+    touchSelectionLongPressMs: 450,
+    touchSelectionMoveThresholdPx: 10,
+    selectionState,
+    touchSelectionState: {
+      pendingPointerId: null,
+      activePointerId: null,
+      panPointerId: null,
+      pendingCell: null,
+      pendingStartedAt: 0,
+      pendingStartX: 0,
+      pendingStartY: 0,
+      panLastY: 0,
+      pendingTimer: 0,
+    },
+    desktopSelectionState,
+    linkState: { hoverId: 0, hoverUri: "" },
+    cleanupCanvasFns: [],
+    isTouchPointer: (event) => event.pointerType === "touch",
+    clearPendingTouchSelection: () => {},
+    clearPendingDesktopSelection: () => {
+      desktopSelectionState.pendingPointerId = null;
+      desktopSelectionState.pendingCell = null;
+      desktopSelectionState.startedWithActiveSelection = false;
+    },
+    tryActivatePendingTouchSelection: () => false,
+    beginSelectionDrag: () => {},
+    selectWordAtCell: (cell) => {
+      wordCells.push(cell);
+      selectionState.active = true;
+      return true;
+    },
+    selectLineAtCell: (cell) => {
+      lineCells.push(cell);
+      selectionState.active = true;
+      return true;
+    },
+    normalizeSelectionCell: (cell) => cell,
+    positionToCell: () => ({ row: 1, col: 5 }),
+    scrollViewportByLines: () => {},
+    clearSelection: () => {
+      selectionState.active = false;
+    },
+    updateCanvasCursor: () => {},
+    markNeedsRender: () => {},
+    updateLinkHover: () => {},
+    getGridState: () => ({ cols: 80, rows: 24, cellW: 10, cellH: 20 }),
+    getWasmReady: () => true,
+    getWasmHandle: () => 1,
+  });
+
+  canvas.emit("pointerup", createPointerEvent({ button: 0 }).event as unknown as Event);
+
+  const second = createPointerEvent({ button: 0 });
+  canvas.emit("pointerup", second.event as unknown as Event);
+  expect(second.prevented()).toBe(true);
+  expect(wordCells).toEqual([{ row: 1, col: 5 }]);
+
+  const third = createPointerEvent({ button: 0 });
+  canvas.emit("pointerup", third.event as unknown as Event);
+  expect(third.prevented()).toBe(true);
+  expect(lineCells).toEqual([{ row: 1, col: 5 }]);
 });

@@ -20,6 +20,8 @@ type CreatePointerUpHandlerOptions = {
   clearPendingDesktopSelection: () => void;
   desktopSelectionState: RuntimeDesktopSelectionState;
   clearSelection: () => void;
+  selectWordAtCell?: (cell: RuntimeCell) => boolean;
+  selectLineAtCell?: (cell: RuntimeCell) => boolean;
   updateCanvasCursor: () => void;
   markNeedsRender: () => void;
   shouldRoutePointerToAppMouse: (shiftKey: boolean) => boolean;
@@ -41,6 +43,8 @@ export function createPointerUpHandler(options: CreatePointerUpHandlerOptions) {
     clearPendingDesktopSelection,
     desktopSelectionState,
     clearSelection,
+    selectWordAtCell = () => false,
+    selectLineAtCell = () => false,
     updateCanvasCursor,
     markNeedsRender,
     shouldRoutePointerToAppMouse,
@@ -82,6 +86,38 @@ export function createPointerUpHandler(options: CreatePointerUpHandlerOptions) {
     }
 
     const cell = normalizeSelectionCell(positionToCell(event));
+    const isPlainPrimaryClick =
+      event.button === 0 && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+    if (isPlainPrimaryClick && !selectionState.dragging) {
+      const now = performance.now();
+      const lastCell = desktopSelectionState.lastPrimaryClickCell;
+      const sameCell = lastCell?.row === cell.row && lastCell?.col === cell.col;
+      const withinTimeout = sameCell && now - desktopSelectionState.lastPrimaryClickAt <= 700;
+      const clickCount = withinTimeout ? desktopSelectionState.lastPrimaryClickCount + 1 : 1;
+
+      if (clickCount >= 3 && selectLineAtCell(cell)) {
+        if (desktopSelectionState.pendingPointerId === event.pointerId) {
+          clearPendingDesktopSelection();
+        }
+        desktopSelectionState.lastPrimaryClickAt = now;
+        desktopSelectionState.lastPrimaryClickCell = { row: cell.row, col: cell.col };
+        desktopSelectionState.lastPrimaryClickCount = Math.min(clickCount, 3);
+        event.preventDefault();
+        return;
+      }
+
+      if (clickCount >= 2 && selectWordAtCell(cell)) {
+        if (desktopSelectionState.pendingPointerId === event.pointerId) {
+          clearPendingDesktopSelection();
+        }
+        desktopSelectionState.lastPrimaryClickAt = now;
+        desktopSelectionState.lastPrimaryClickCell = { row: cell.row, col: cell.col };
+        desktopSelectionState.lastPrimaryClickCount = 2;
+        event.preventDefault();
+        return;
+      }
+    }
+
     const clearSelectionFromClick =
       desktopSelectionState.pendingPointerId === event.pointerId &&
       desktopSelectionState.startedWithActiveSelection &&
@@ -114,6 +150,15 @@ export function createPointerUpHandler(options: CreatePointerUpHandlerOptions) {
         return;
       }
       updateLinkHover(cell);
+    }
+    if (!selectionState.active && isPlainPrimaryClick) {
+      desktopSelectionState.lastPrimaryClickAt = performance.now();
+      desktopSelectionState.lastPrimaryClickCell = { row: cell.row, col: cell.col };
+      desktopSelectionState.lastPrimaryClickCount = 1;
+    } else if (event.button === 0) {
+      desktopSelectionState.lastPrimaryClickAt = 0;
+      desktopSelectionState.lastPrimaryClickCell = null;
+      desktopSelectionState.lastPrimaryClickCount = 0;
     }
     if (
       !selectionState.active &&

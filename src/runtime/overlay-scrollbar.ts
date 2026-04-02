@@ -1,5 +1,3 @@
-import { clamp } from "../grid";
-
 export const OVERLAY_SCROLLBAR_WIDTH_CSS_PX = 7;
 export const OVERLAY_SCROLLBAR_MARGIN_CSS_PX = 4;
 export const OVERLAY_SCROLLBAR_INSET_Y_CSS_PX = 2;

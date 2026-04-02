@@ -153,13 +153,14 @@ class FakeNode extends FakeEventTarget {
 
   dispatchEvent(event: Event): boolean {
     defineEventField(event, "target", this);
-    let current: FakeNode | null = this;
-    while (current) {
+    const dispatchToNode = (current: FakeNode | null): boolean => {
+      if (!current) return false;
       defineEventField(event, "currentTarget", current);
       current.emit(event.type, event);
-      if (event.cancelBubble) return !event.defaultPrevented;
-      current = current.parentNode;
-    }
+      if (event.cancelBubble) return true;
+      return dispatchToNode(current.parentNode);
+    };
+    dispatchToNode(this);
     defineEventField(event, "currentTarget", this.ownerDocument.defaultView);
     this.ownerDocument.defaultView.emit(event.type, event);
     return !event.defaultPrevented;

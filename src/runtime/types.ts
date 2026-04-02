@@ -244,6 +244,8 @@ export type ResttyAppOptions = {
   renderer?: "auto" | "webgpu" | "webgl2";
   /** Font size in CSS pixels. */
   fontSize?: number;
+  /** Enable programming ligature shaping across adjacent operator cells (default true). */
+  ligatures?: boolean;
   /** Enable TrueType hinting during atlas rasterization (default false). */
   fontHinting?: boolean;
   /**
@@ -343,6 +345,8 @@ export type ResttyApp = {
   togglePause: () => void;
   /** Update the terminal font size in CSS pixels. */
   setFontSize: (value: number) => void;
+  /** Enable or disable programming ligature shaping. */
+  setLigatures: (value: boolean) => void;
   /** Enable or disable TrueType hinting for atlas glyph rasterization. */
   setFontHinting: (value: boolean) => void;
   /** Update hinting target mode used when hinting is enabled. */

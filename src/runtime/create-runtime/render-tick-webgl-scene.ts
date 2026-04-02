@@ -5,6 +5,8 @@ import {
 } from "./highlight-terminal-color-utils";
 import { searchHighlightForColumn } from "./search-highlight-utils";
 
+import { resolveLigatureRun, resolveRenderableLigatureRun } from "./ligature-runs";
+
 export function populateWebGLSceneData(ctx: WebGLTickContext) {
   const {
     deps,
@@ -42,6 +44,7 @@ export function populateWebGLSceneData(ctx: WebGLTickContext) {
     getGlyphSet,
     noteGlyphMeta,
   } = ctx;
+  const mergedLigatureSkip = new Uint8Array(codepoints.length);
 
   const {
     fontState,
@@ -260,7 +263,7 @@ export function populateWebGLSceneData(ctx: WebGLTickContext) {
 
       if (bgOnly || textHidden) continue;
 
-      if (mergedEmojiSkip[idx]) continue;
+      if (mergedEmojiSkip[idx] || mergedLigatureSkip[idx]) continue;
       const cluster = readCellCluster(idx);
       if (!cluster) continue;
       const cp = cluster.cp;
@@ -323,6 +326,42 @@ export function populateWebGLSceneData(ctx: WebGLTickContext) {
       }
 
       if (extra > 0 && text.trim() === "") continue;
+
+      const ligatureRun = deps.getLigatures()
+        ? resolveLigatureRun({
+            idx,
+            row,
+            col,
+            cols,
+            contentTags,
+            styleFlags,
+            linkIds,
+            fgBytes,
+            bgBytes,
+            ulBytes,
+            ulStyle,
+            cursorBlock,
+            cursorCell,
+            readCellCluster,
+          })
+        : null;
+      const renderableLigatureRun = ligatureRun
+        ? resolveRenderableLigatureRun({
+            ligatureRun,
+            stylePreference: stylePreferenceFromFlags(bold, italic),
+            fonts: fontState.fonts,
+            pickFontIndexForText,
+            shapeClusterWithFont,
+            readCellCluster,
+          })
+        : null;
+      if (renderableLigatureRun) {
+        text = renderableLigatureRun.text;
+        baseSpan = renderableLigatureRun.span;
+        for (let i = 1; i < renderableLigatureRun.indices.length; i += 1) {
+          mergedLigatureSkip[renderableLigatureRun.indices[i]] = 1;
+        }
+      }
 
       const fontIndex = pickFontIndexForText(
         text,

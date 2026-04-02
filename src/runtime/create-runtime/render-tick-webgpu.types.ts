@@ -111,6 +111,7 @@ export type SharedTickDeps = {
     overrides: Array<{ match: RegExp; scale: number }>,
   ) => number;
   FONT_SCALE_OVERRIDES: Array<{ match: RegExp; scale: number }>;
+  getLigatures: () => boolean;
   getFontHinting: () => boolean;
   getFontHintTarget: () => ResttyFontHintTarget;
   isSymbolFont: (entry: FontEntry) => boolean;

@@ -1,6 +1,7 @@
 import type { Color } from "../../renderer";
 import type { Font, FontEntry } from "../../fonts";
 import type { GlyphConstraintMeta } from "../atlas-builder";
+import { resolveLigatureRun, resolveRenderableLigatureRun } from "./ligature-runs";
 import type { CollectWebGPUCellPassParams, GlyphQueueItem } from "./render-tick-webgpu.types";
 import {
   resolveHighlightBackgroundColor,
@@ -121,6 +122,7 @@ export function collectWebGPUCellPass(params: CollectWebGPUCellPassParams) {
   const fgColorCache = new Map<number, Color>();
   const bgColorCache = new Map<number, Color>();
   const ulColorCache = new Map<number, Color>();
+  const mergedLigatureSkip = new Uint8Array(codepoints.length);
 
   const primaryEntry = fontState.fonts[0];
   type FallbackScaleMetric = "ic_width" | "ex_height" | "cap_height" | "line_height";
@@ -487,7 +489,7 @@ export function collectWebGPUCellPass(params: CollectWebGPUCellPassParams) {
 
       if (bgOnly || textHidden) continue;
 
-      if (mergedEmojiSkip[idx]) continue;
+      if (mergedEmojiSkip[idx] || mergedLigatureSkip[idx]) continue;
       const cluster = readCellCluster(idx);
       if (!cluster) continue;
       const cp = cluster.cp;
@@ -554,6 +556,42 @@ export function collectWebGPUCellPass(params: CollectWebGPUCellPassParams) {
       }
 
       if (extra > 0 && text.trim() === "") continue;
+
+      const ligatureRun = deps.getLigatures()
+        ? resolveLigatureRun({
+            idx,
+            row,
+            col,
+            cols,
+            contentTags,
+            styleFlags,
+            linkIds,
+            fgBytes,
+            bgBytes,
+            ulBytes,
+            ulStyle,
+            cursorBlock,
+            cursorCell,
+            readCellCluster,
+          })
+        : null;
+      const renderableLigatureRun = ligatureRun
+        ? resolveRenderableLigatureRun({
+            ligatureRun,
+            stylePreference: stylePreferenceFromFlags(bold, italic),
+            fonts: fontState.fonts,
+            pickFontIndexForText,
+            shapeClusterWithFont,
+            readCellCluster,
+          })
+        : null;
+      if (renderableLigatureRun) {
+        text = renderableLigatureRun.text;
+        baseSpan = renderableLigatureRun.span;
+        for (let i = 1; i < renderableLigatureRun.indices.length; i += 1) {
+          mergedLigatureSkip[renderableLigatureRun.indices[i]] = 1;
+        }
+      }
 
       const fontIndex = pickFontIndexForText(
         text,

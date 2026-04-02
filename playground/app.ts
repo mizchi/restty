@@ -42,6 +42,7 @@ const themeSelect = document.getElementById("themeSelect") as HTMLSelectElement 
 const themeFileInput = document.getElementById("themeFile") as HTMLInputElement | null;
 const fontSizeInput = document.getElementById("fontSize") as HTMLInputElement | null;
 const fontFamilySelect = document.getElementById("fontFamily") as HTMLSelectElement | null;
+const ligaturesSelect = document.getElementById("ligatures") as HTMLSelectElement | null;
 const fontHintingSelect = document.getElementById("fontHinting") as HTMLSelectElement | null;
 const fontHintTargetSelect = document.getElementById("fontHintTarget") as HTMLSelectElement | null;
 const fontFamilyLocalSelect = document.getElementById(
@@ -56,8 +57,9 @@ const settingsDialog = document.getElementById("settingsDialog") as HTMLDialogEl
 const settingsClose = document.getElementById("settingsClose") as HTMLButtonElement | null;
 
 const DEFAULT_THEME_NAME = "Aizen Dark";
-const DEFAULT_FONT_FAMILY = "jetbrains";
+const DEFAULT_FONT_FAMILY = "fira-code";
 const FONT_FAMILY_LOCAL_PREFIX = "local:";
+const FONT_URL_FIRA_CODE = "/playground/public/fonts/FiraCode-Regular.ttf";
 const FONT_URL_JETBRAINS_MONO =
   "https://cdn.jsdelivr.net/gh/ryanoasis/nerd-fonts@v3.4.0/patched-fonts/JetBrainsMono/NoLigatures/Regular/JetBrainsMonoNLNerdFontMono-Regular.ttf";
 const FONT_URL_JETBRAINS_MONO_BOLD =
@@ -84,6 +86,15 @@ type RendererChoice = "auto" | "webgpu" | "webgl2";
 type ConnectionBackend = "ws" | "webcontainer";
 type ShaderPreset = "none" | "scanline" | "aurora" | "crt-lite" | "mono-green";
 type FontHintTarget = "auto" | "light" | "normal";
+type FontPresetKey = "fira-code" | "jetbrains";
+type LocalFontVariant = {
+  suffix: string;
+  matchers: string[];
+};
+type FontPresetConfig = {
+  localVariants: LocalFontVariant[];
+  bundledFaces?: Array<{ label: string; url: string }>;
+};
 
 type PaneUiState = {
   backend: string;
@@ -114,17 +125,84 @@ let activePaneId: number | null = null;
 let resizeRaf = 0;
 let restty: Restty;
 let notificationPermissionRequest: Promise<NotificationPermission> | null = null;
-let selectedShaderPreset: ShaderPreset =
-  (shaderPresetEl?.value as ShaderPreset | undefined) ?? "none";
+let selectedShaderPreset = (shaderPresetEl?.value as ShaderPreset | undefined) ?? "none";
+
+const FONT_PRESETS: Record<FontPresetKey, FontPresetConfig> = {
+  "fira-code": {
+    localVariants: [
+      { suffix: "", matchers: ["fira code", "firacode", "fira code regular"] },
+      { suffix: "bold", matchers: ["fira code bold", "firacode bold"] },
+      { suffix: "italic", matchers: ["fira code italic", "firacode italic"] },
+      {
+        suffix: "bold italic",
+        matchers: ["fira code bold italic", "firacode bold italic", "fira code retina"],
+      },
+    ],
+    bundledFaces: [{ label: "Fira Code Regular", url: FONT_URL_FIRA_CODE }],
+  },
+  jetbrains: {
+    localVariants: [
+      {
+        suffix: "",
+        matchers: [
+          "jetbrains mono nl nerd font mono regular",
+          "jetbrains mono nl nerd font mono",
+          "jetbrains mono nl",
+          "jetbrains mono",
+        ],
+      },
+      {
+        suffix: "bold",
+        matchers: [
+          "jetbrains mono nl nerd font mono bold",
+          "jetbrains mono nl bold",
+          "jetbrains mono bold",
+          "jetbrainsmono nerd font mono bold",
+        ],
+      },
+      {
+        suffix: "italic",
+        matchers: [
+          "jetbrains mono nl nerd font mono italic",
+          "jetbrains mono nl italic",
+          "jetbrains mono italic",
+          "jetbrainsmono nerd font mono italic",
+        ],
+      },
+      {
+        suffix: "bold italic",
+        matchers: [
+          "jetbrains mono nl nerd font mono bold italic",
+          "jetbrains mono nl bold italic",
+          "jetbrains mono bold italic",
+          "jetbrains mono nl italic bold",
+          "jetbrains mono italic bold",
+          "jetbrainsmono nerd font mono bold italic",
+        ],
+      },
+    ],
+  },
+};
 
 const initialFontSize = fontSizeInput?.value ? Number(fontSizeInput.value) : 18;
 let selectedFontFamily = fontFamilySelect?.value ?? DEFAULT_FONT_FAMILY;
 let selectedLocalFontMatcher = "";
 const searchParams =
   typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-const fontHintingParam = searchParams?.get("hinting")?.toLowerCase() ?? "";
-let selectedFontHinting =
-  fontHintingParam === "1" || fontHintingParam === "true" || fontHintingParam === "on";
+function isTruthyQueryParam(value: string | null | undefined) {
+  if (!value) return false;
+  const normalized = value.toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "on";
+}
+
+function isFalsyQueryParam(value: string | null | undefined) {
+  if (!value) return false;
+  const normalized = value.toLowerCase();
+  return normalized === "0" || normalized === "false" || normalized === "off";
+}
+
+let selectedLigatures = !isFalsyQueryParam(searchParams?.get("ligatures"));
+let selectedFontHinting = isTruthyQueryParam(searchParams?.get("hinting"));
 const resolveFontHintTarget = (value: string | null | undefined): FontHintTarget => {
   if (value === "light" || value === "normal" || value === "auto") return value;
   return "auto";
@@ -152,6 +230,14 @@ function setFontFamilyHint(text: string) {
   if (fontFamilyHintEl) fontFamilyHintEl.textContent = text;
 }
 
+function createLocalFontSource(baseLabel: string, variant: LocalFontVariant): ResttyFontSource {
+  return {
+    type: "local",
+    label: variant.suffix ? `local:${baseLabel} ${variant.suffix}` : `local:${baseLabel}`,
+    matchers: variant.matchers,
+  };
+}
+
 function buildFontSourcesForSelection(value: string, localMatcher: string): ResttyFontSource[] {
   const sources: ResttyFontSource[] = [];
 
@@ -164,49 +250,19 @@ function buildFontSourcesForSelection(value: string, localMatcher: string): Rest
     });
   }
 
-  if (value === "jetbrains") {
-    sources.push({
-      type: "local",
-      label: "local:jetbrains mono",
-      matchers: [
-        "jetbrains mono nl nerd font mono regular",
-        "jetbrains mono nl nerd font mono",
-        "jetbrains mono nl",
-        "jetbrains mono",
-      ],
-    });
-    sources.push({
-      type: "local",
-      label: "local:jetbrains mono bold",
-      matchers: [
-        "jetbrains mono nl nerd font mono bold",
-        "jetbrains mono nl bold",
-        "jetbrains mono bold",
-        "jetbrainsmono nerd font mono bold",
-      ],
-    });
-    sources.push({
-      type: "local",
-      label: "local:jetbrains mono italic",
-      matchers: [
-        "jetbrains mono nl nerd font mono italic",
-        "jetbrains mono nl italic",
-        "jetbrains mono italic",
-        "jetbrainsmono nerd font mono italic",
-      ],
-    });
-    sources.push({
-      type: "local",
-      label: "local:jetbrains mono bold italic",
-      matchers: [
-        "jetbrains mono nl nerd font mono bold italic",
-        "jetbrains mono nl bold italic",
-        "jetbrains mono bold italic",
-        "jetbrains mono nl italic bold",
-        "jetbrains mono italic bold",
-        "jetbrainsmono nerd font mono bold italic",
-      ],
-    });
+  const preset = FONT_PRESETS[value as FontPresetKey];
+  if (preset) {
+    const baseLabel = value.replace("-", " ");
+    for (const variant of preset.localVariants) {
+      sources.push(createLocalFontSource(baseLabel, variant));
+    }
+    for (const face of preset.bundledFaces ?? []) {
+      sources.push({
+        type: "url",
+        label: face.label,
+        url: face.url,
+      });
+    }
   }
 
   sources.push({
@@ -312,6 +368,9 @@ function syncFontFamilyControls() {
 }
 
 function syncHintingControls() {
+  if (ligaturesSelect) {
+    ligaturesSelect.value = selectedLigatures ? "on" : "off";
+  }
   if (fontHintingSelect) {
     fontHintingSelect.value = selectedFontHinting ? "on" : "off";
   }
@@ -495,10 +554,11 @@ async function applyFontSourcesToAllPanes() {
   }
 }
 
-function applyHintingToAllPanes() {
+function applyFontRenderingOptionsToAllPanes() {
   const panes = restty.getPanes();
   for (let i = 0; i < panes.length; i += 1) {
     const pane = panes[i];
+    pane.app.setLigatures(selectedLigatures);
     pane.app.setFontHintTarget(selectedFontHintTarget);
     pane.app.setFontHinting(selectedFontHinting);
   }
@@ -941,6 +1001,7 @@ restty = new Restty({
     return {
       renderer: paneState.renderer,
       fontSize: paneState.fontSize,
+      ligatures: selectedLigatures,
       fontHinting: selectedFontHinting,
       fontHintTarget: selectedFontHintTarget,
       // Ghostty parity: use EM sizing semantics and native alpha blending.
@@ -1207,7 +1268,15 @@ if (fontHintingSelect) {
   fontHintingSelect.addEventListener("change", () => {
     selectedFontHinting = fontHintingSelect.value === "on";
     syncHintingControls();
-    applyHintingToAllPanes();
+    applyFontRenderingOptionsToAllPanes();
+  });
+}
+
+if (ligaturesSelect) {
+  ligaturesSelect.addEventListener("change", () => {
+    selectedLigatures = ligaturesSelect.value === "on";
+    syncHintingControls();
+    applyFontRenderingOptionsToAllPanes();
   });
 }
 
@@ -1215,7 +1284,7 @@ if (fontHintTargetSelect) {
   fontHintTargetSelect.addEventListener("change", () => {
     selectedFontHintTarget = resolveFontHintTarget(fontHintTargetSelect.value);
     syncHintingControls();
-    applyHintingToAllPanes();
+    applyFontRenderingOptionsToAllPanes();
   });
 }
 

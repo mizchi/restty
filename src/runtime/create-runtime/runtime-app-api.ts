@@ -44,6 +44,7 @@ type RuntimeSendInput = (text: string, source?: string, options?: { skipHooks?: 
 
 type RuntimePublicApiOptions = {
   setFontSize: ResttyApp["setFontSize"];
+  setLigatures: ResttyApp["setLigatures"];
   setFontHinting: ResttyApp["setFontHinting"];
   setFontHintTarget: ResttyApp["setFontHintTarget"];
   setFontSources: ResttyApp["setFontSources"];
@@ -679,6 +680,7 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
       setPaused,
       togglePause,
       setFontSize: publicApiOptions.setFontSize,
+      setLigatures: publicApiOptions.setLigatures,
       setFontHinting: publicApiOptions.setFontHinting,
       setFontHintTarget: publicApiOptions.setFontHintTarget,
       setFontSources: publicApiOptions.setFontSources,

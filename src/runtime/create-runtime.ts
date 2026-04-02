@@ -227,6 +227,7 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     if (value === "light" || value === "normal" || value === "auto") return value;
     return "auto";
   };
+  let ligatures = options.ligatures ?? true;
   let fontHinting = options.fontHinting ?? false;
   let fontHintTarget = resolveFontHintTarget(options.fontHintTarget);
   const nerdIconScale = Number.isFinite(options.nerdIconScale)
@@ -686,6 +687,7 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     markSearchDirty: () => {
       searchRuntime.markDirty();
     },
+    getLigatures: () => ligatures,
     getFontHinting: () => fontHinting,
     getFontHintTarget: () => fontHintTarget,
     fontScaleOverrides: FONT_SCALE_OVERRIDES,
@@ -919,6 +921,14 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     appendLog(`[ui] font hinting ${next ? "on" : "off"}`);
   }
 
+  function setLigatures(value: boolean) {
+    const next = Boolean(value);
+    if (ligatures === next) return;
+    ligatures = next;
+    needsRender = true;
+    appendLog(`[ui] ligatures ${next ? "on" : "off"}`);
+  }
+
   function setFontHintTarget(value: ResttyFontHintTarget) {
     const next = resolveFontHintTarget(value);
     if (fontHintTarget === next) return;
@@ -1042,6 +1052,7 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     updateImePosition,
     fontScaleOverride,
     FONT_SCALE_OVERRIDES,
+    getLigatures: () => ligatures,
     getFontHinting: () => fontHinting,
     getFontHintTarget: () => fontHintTarget,
     isSymbolFont,
@@ -1271,6 +1282,7 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
   });
   return runtimeAppApi.createPublicApi({
     setFontSize: applyFontSize,
+    setLigatures,
     setFontHinting,
     setFontHintTarget,
     setFontSources,

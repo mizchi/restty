@@ -66,8 +66,9 @@ export function bindImeEvents(options: BindImeEventsOptions) {
     setPreedit("", true);
     imeState.selectionStart = 0;
     imeState.selectionEnd = 0;
-    const text = event.data || "";
-    if (text) {
+    // Some browsers can deliver empty compositionend.data for committed text.
+    const text = event.data || imeInput.value || "";
+    if (text && getWasmReady() && getWasmHandle()) {
       suppressNextInput = true;
       sendKeyInput(text);
     }

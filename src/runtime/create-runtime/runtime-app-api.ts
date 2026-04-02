@@ -200,6 +200,10 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
     }
   }
 
+  function canRenderFrame(shared: RuntimeAppApiSharedState): boolean {
+    return Boolean(shared.wasmReady && shared.wasm && shared.wasmHandle);
+  }
+
   function loop(state: WebGPUState | WebGLState) {
     if (!internalState.paused) {
       const now = performance.now();
@@ -221,10 +225,14 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
         ? true
         : now - nextShared.lastRenderTime >= 1000 / targetRenderFps;
       if (nextShared.needsRender && renderBudget) {
-        if (internalState.backend === "webgpu" && "device" in state) tickWebGPU(state);
-        if (internalState.backend === "webgl2" && "gl" in state) tickWebGL(state);
-        writeState({ lastRenderTime: now, needsRender: false });
-        updateFps();
+        // Avoid presenting a cleared frame before the terminal core has a live handle.
+        // Leaving needsRender=true retries immediately once startup finishes.
+        if (canRenderFrame(nextShared)) {
+          if (internalState.backend === "webgpu" && "device" in state) tickWebGPU(state);
+          if (internalState.backend === "webgl2" && "gl" in state) tickWebGL(state);
+          writeState({ lastRenderTime: now, needsRender: false });
+          updateFps();
+        }
       }
     }
     internalState.rafId = requestAnimationFrame(() => loop(state));

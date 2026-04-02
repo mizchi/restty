@@ -168,3 +168,101 @@ test("bindImeEvents forwards beforeinput erase when keydown dedupe window has el
 
   expect(sent).toEqual(["\x7f"]);
 });
+
+test("bindImeEvents falls back to imeInput value on compositionend", () => {
+  const sent: string[] = [];
+  const imeInput = new FakeTextArea();
+  imeInput.value = "に";
+
+  bindImeEvents({
+    bindOptions: {
+      inputHandler: createInputHandlerStub(),
+      sendKeyInput: (text) => {
+        sent.push(text);
+      },
+      sendPasteText: () => {},
+      sendPastePayloadFromDataTransfer: () => false,
+      getLastKeydownSeq: () => "",
+      getLastKeydownSeqAt: () => 0,
+      keydownBeforeinputDedupeMs: 80,
+      openLink: () => {},
+    },
+    imeInput: imeInput as unknown as HTMLTextAreaElement,
+    imeState: {
+      composing: true,
+      preedit: "",
+      selectionStart: 0,
+      selectionEnd: 0,
+    },
+    cleanupCanvasFns: [],
+    getWasmReady: () => true,
+    getWasmHandle: () => 1,
+    setPreedit: () => {},
+    syncImeSelection: () => {},
+  });
+
+  imeInput.emit(
+    "compositionend",
+    {
+      data: "",
+    } as CompositionEvent,
+  );
+
+  expect(sent).toEqual(["に"]);
+  expect(imeInput.value).toBe("");
+});
+
+test("bindImeEvents does not suppress follow-up input when compositionend fires before wasm is ready", () => {
+  const sent: string[] = [];
+  const imeInput = new FakeTextArea();
+  let wasmReady = false;
+  imeInput.value = "你";
+
+  bindImeEvents({
+    bindOptions: {
+      inputHandler: createInputHandlerStub(),
+      sendKeyInput: (text) => {
+        sent.push(text);
+      },
+      sendPasteText: () => {},
+      sendPastePayloadFromDataTransfer: () => false,
+      getLastKeydownSeq: () => "",
+      getLastKeydownSeqAt: () => 0,
+      keydownBeforeinputDedupeMs: 80,
+      openLink: () => {},
+    },
+    imeInput: imeInput as unknown as HTMLTextAreaElement,
+    imeState: {
+      composing: true,
+      preedit: "",
+      selectionStart: 0,
+      selectionEnd: 0,
+    },
+    cleanupCanvasFns: [],
+    getWasmReady: () => wasmReady,
+    getWasmHandle: () => (wasmReady ? 1 : 0),
+    setPreedit: () => {},
+    syncImeSelection: () => {},
+  });
+
+  imeInput.emit(
+    "compositionend",
+    {
+      data: "你",
+    } as CompositionEvent,
+  );
+
+  expect(sent).toEqual([]);
+
+  wasmReady = true;
+  imeInput.value = "你";
+  imeInput.emit(
+    "input",
+    {
+      data: "你",
+    } as InputEvent,
+  );
+
+  expect(sent).toEqual(["你"]);
+  expect(imeInput.value).toBe("");
+});

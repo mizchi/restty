@@ -23,6 +23,12 @@ Powered by:
 - `WebGPU` (with WebGL2 fallback)
 - `text-shaper` (shaping + raster)
 
+Recent additions:
+
+- programming ligatures with cross-cell shaping
+- desktop double-click word selection and triple-click line selection
+- standalone ESM bundles at `restty/esm`, `restty/esm/internal`, and `restty/esm/xterm`
+
 ## Release Status
 
 `restty` is in an early release stage.
@@ -97,8 +103,10 @@ for (const pane of restty.panes()) {
 
 ```ts
 restty.setFontSize(15);
+restty.setLigatures(true);
 restty.sendInput("ls -la\n");
 restty.copySelectionToClipboard();
+restty.selectWordAtClientPoint(120, 48);
 ```
 
 ### Provide custom fonts
@@ -137,6 +145,21 @@ await restty.setFontSources([
   },
 ]);
 ```
+
+### Use standalone single-file ESM bundles
+
+When you want self-contained browser ESM artifacts instead of the split package entrypoints:
+
+```ts
+import { Restty } from "restty/esm";
+import { Terminal } from "restty/esm/xterm";
+```
+
+Package outputs:
+
+- `restty/esm` -> `dist/restty.esm.js`
+- `restty/esm/internal` -> `dist/internal.esm.js`
+- `restty/esm/xterm` -> `dist/xterm.esm.js`
 
 ### Touch behavior (pan-first by default)
 
@@ -305,11 +328,12 @@ Active-pane convenience:
 
 - `connectPty(url)` / `disconnectPty()` / `isPtyConnected()`
 - `setRenderer("auto" | "webgpu" | "webgl2")`
-- `setFontSize(number)` / `setFontSources([...])`
+- `setFontSize(number)` / `setLigatures(boolean)` / `setFontSources([...])`
 - `applyTheme(theme)` / `resetTheme()`
 - `setMouseMode("auto" | "on" | "off")`
 - `sendInput(text)` / `sendKeyInput(text)`
 - `copySelectionToClipboard()` / `pasteFromClipboard()`
+- `selectWordAtClientPoint(x, y)`
 - `resize(cols, rows)` / `focus()` / `blur()`
 - `updateSize(force?)`
 - `destroy()`
@@ -329,6 +353,7 @@ Shader stages:
 Use these only when you need lower-level control:
 
 - `restty/internal`: full internal barrel (unstable; includes low-level modules like WASM/input/pty helpers)
+- `restty/esm`, `restty/esm/internal`, `restty/esm/xterm`: standalone bundled browser ESM entrypoints
 
 ## Local Development
 

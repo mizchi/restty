@@ -31,6 +31,8 @@
 
 ## Ligature Rendering Rule
 - Draw glyphs from shaped output, not per-cell glyphs.
+- For programming ligatures, merge visually uniform operator runs first, then compare
+  combined shaping against per-cell shaping before deciding to skip covered cells.
 - For cells covered by a multi-cell ligature, **skip per-cell glyphs**.
 - Cursor and selection remain cell-based and are drawn **after** background
   but **before** glyphs (selection) and **after** glyphs (cursor), as overlays.

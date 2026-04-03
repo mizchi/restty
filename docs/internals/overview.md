@@ -5,7 +5,7 @@
 - GPU rendering (WebGPU primary, WebGL2 fallback).
 - High-quality text shaping and rasterization using text-shaper (TypeScript).
 - Ligatures on by default.
-- Bundle a common ligature font and optionally use local fonts via queryLocalFonts.
+- Runtime fonts are local-first with CDN fallback; the playground bundles Fira Code for ligature validation.
 - Native Restty API first, with optional xterm compatibility shim (`restty/xterm`).
 
 ## Non-goals (for v1)
@@ -25,7 +25,7 @@
 - **WASM Core**: custom Zig wrapper around ghostty-vt Zig API.
 - **Renderer**: WebGPU pipeline with WebGL2 fallback.
 - **Text Shaper**: text-shaper for shaping, rasterization, atlas generation.
-- **Font Manager**: bundled font + optional queryLocalFonts integration.
+- **Font Manager**: local-first sources, CDN fallbacks, optional queryLocalFonts integration.
 - **Input**: key encoder + IME text input handling.
 
 ## Directory Map (current)

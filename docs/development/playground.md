@@ -22,11 +22,19 @@ Hinting experiments (playground URL params):
 - `?hinting=1&hintTarget=auto`
 - `?hinting=1&hintTarget=light`
 - `?hinting=1&hintTarget=normal`
+- `?ligatures=off`
 
 `hinting=0` (or omitted) keeps atlas hinting disabled.
+Ligatures are on by default.
 
 You can also toggle both settings live in the playground Settings panel
 (`Appearance` section) without reloading.
+
+Playground font defaults:
+
+- `Base Font: Fira Code (default)`
+- `Ligatures: On`
+- bundled Fira Code is served from `playground/public/fonts/FiraCode-Regular.ttf`
 
 WebContainer mode note:
 
@@ -54,6 +62,7 @@ From repo root:
 
 This downloads:
 
+- `FiraCode-Regular.ttf`
 - `JetBrainsMono-Regular.ttf`
 - `SymbolsNerdFontMono-Regular.ttf`
 - `OpenMoji-black-glyf.ttf`
@@ -64,6 +73,7 @@ This downloads:
 - Resize/DPR handling.
 - Animation loop stability.
 - Text shaping + rasterized atlas rendering (foreground/background/selection/cursor).
+- Cross-cell programming ligatures with bundled Fira Code.
 
 ## Notes
 - WebGPU requires a modern Chromium/Firefox build with WebGPU enabled.

@@ -37,6 +37,7 @@ const restty = new Restty({
   appOptions: {
     renderer: "auto", // "auto" | "webgpu" | "webgl2"
     fontSize: 16,
+    ligatures: true,
     // Optional text-shaper hinting controls:
     // hinting off by default for parity/thickness reasons.
     fontHinting: false,
@@ -65,6 +66,7 @@ These methods target the current active pane.
 restty.connectPty("ws://localhost:8787/pty");
 restty.setRenderer("auto");
 restty.setFontSize(15);
+restty.setLigatures(true);
 
 restty.sendInput("echo 'hello'\n");
 restty.sendKeyInput("\u001b[A");
@@ -72,6 +74,7 @@ restty.sendKeyInput("\u001b[A");
 restty.setMouseMode("auto");
 await restty.copySelectionToClipboard();
 await restty.pasteFromClipboard();
+restty.selectWordAtClientPoint(120, 48);
 
 restty.focus();
 restty.resize(120, 32);
@@ -169,7 +172,27 @@ await restty.setFontSources([
 ]);
 ```
 
-## 7) Cleanup
+Ligature note:
+
+- Programming ligatures are enabled by default.
+- Toggle them at runtime with `restty.setLigatures(false)` when you want strict per-cell operator rendering.
+
+## 7) Standalone ESM bundles
+
+Use the bundled entrypoints when you want a self-contained browser ESM artifact:
+
+```ts
+import { Restty } from "restty/esm";
+import { Terminal } from "restty/esm/xterm";
+```
+
+Available subpaths:
+
+- `restty/esm`
+- `restty/esm/internal`
+- `restty/esm/xterm`
+
+## 8) Cleanup
 
 ```ts
 restty.destroy();
@@ -177,11 +200,12 @@ restty.destroy();
 
 Call `destroy()` when removing the terminal from the page to release GPU/WASM/PTY resources.
 
-## 8) Advanced modules
+## 9) Advanced modules
 
 Use these only if `Restty` is not enough:
 
 - `restty/internal`: full internal barrel (unstable; includes low-level WASM/PTY/input APIs)
+- `restty/esm/internal`: bundled internal barrel for browser ESM use
 
 Low-level example:
 
@@ -202,7 +226,7 @@ if (state) {
 wasm.destroy(handle);
 ```
 
-## 9) Plugin host (native)
+## 10) Plugin host (native)
 
 ```ts
 import type { ResttyPlugin } from "restty";

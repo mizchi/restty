@@ -1,7 +1,8 @@
 # Font Strategy
 
 ## Default Font
-- Bundle JetBrains Mono (OFL-1.1) as default ligature-capable font.
+- Runtime defaults remain local-first with CDN fallback.
+- The playground bundles Fira Code specifically for ligature debugging.
 - Provide a fallback mono stack (CSS for DOM controls / non-gpu text).
 
 ## Local Fonts (Chromium)
@@ -19,6 +20,7 @@
 - Provide a custom API:
   - `setFont({ source: 'bundled' | 'local', name, data })`
   - `setFontSize(px)`
+  - `setLigatures(boolean)`
   - `setFontFeatures({ liga, calt, kern, ... })`
 
 ## Metrics

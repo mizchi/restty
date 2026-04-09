@@ -83,6 +83,12 @@ export function createLifecycleCanvasHandlers(deps: LifecycleThemeSizeDeps) {
     const canvas = deps.getCanvas();
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
+    // Hidden panes can transiently report zero bounds. Preserving the last
+    // rendered buffer avoids collapsing the WebGL backbuffer to 1x1 and
+    // flashing when the pane becomes visible again.
+    if (rect.width <= 0 || rect.height <= 0) {
+      return;
+    }
     const nextWidth = Math.max(1, Math.floor(rect.width * dpr));
     const nextHeight = Math.max(1, Math.floor(rect.height * dpr));
     const sizeChanged =

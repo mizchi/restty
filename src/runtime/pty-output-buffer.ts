@@ -18,8 +18,17 @@ export function createPtyOutputBufferController(
   let buffer = "";
   let idleTimer = 0;
   let maxTimer = 0;
+  let frameHandle = 0;
+
+  const hasAnimationFrame =
+    typeof globalThis.requestAnimationFrame === "function" &&
+    typeof globalThis.cancelAnimationFrame === "function";
 
   const cancel = () => {
+    if (frameHandle) {
+      globalThis.cancelAnimationFrame(frameHandle);
+      frameHandle = 0;
+    }
     if (idleTimer) {
       clearTimeout(idleTimer);
       idleTimer = 0;
@@ -31,6 +40,7 @@ export function createPtyOutputBufferController(
   };
 
   const flush = () => {
+    cancel();
     const output = buffer;
     buffer = "";
     if (!output) return;
@@ -40,6 +50,21 @@ export function createPtyOutputBufferController(
   const queue = (text: string) => {
     if (!text) return;
     buffer += text;
+    if (hasAnimationFrame) {
+      if (!frameHandle) {
+        frameHandle = globalThis.requestAnimationFrame(() => {
+          frameHandle = 0;
+          flush();
+        });
+      }
+      if (!maxTimer) {
+        maxTimer = setTimeout(() => {
+          maxTimer = 0;
+          flush();
+        }, maxMs);
+      }
+      return;
+    }
     if (idleTimer) {
       clearTimeout(idleTimer);
     }

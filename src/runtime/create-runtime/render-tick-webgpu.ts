@@ -2,6 +2,7 @@ import type { WebGPUState } from "../../renderer";
 import { collectWebGPUCellPass } from "./render-tick-webgpu-cell-pass";
 import { drawWebGPUFrame } from "./render-tick-webgpu-draw-pass";
 import { augmentWebGPUFrameWithOverlaysAndAtlas } from "./render-tick-webgpu-overlays-atlas";
+import { hasPresentableRenderState } from "./render-frame-guard";
 import type { RuntimeTickDeps } from "./render-tick-webgpu.types";
 
 export function tickWebGPU(deps: RuntimeTickDeps, state: WebGPUState) {
@@ -59,7 +60,7 @@ export function tickWebGPU(deps: RuntimeTickDeps, state: WebGPUState) {
   updateGrid();
 
   const render = getRenderState();
-  if (!render || !fontState.font) {
+  if (!hasPresentableRenderState(render, Boolean(fontState.font))) {
     // During live resize, render state can be momentarily unavailable.
     // Keep the last presented frame instead of flashing a cleared frame.
     if (deps.lastRenderState) {
@@ -85,7 +86,6 @@ export function tickWebGPU(deps: RuntimeTickDeps, state: WebGPUState) {
   }
 
   deps.lastRenderState = render;
-
   const {
     rows,
     cols,
@@ -103,8 +103,6 @@ export function tickWebGPU(deps: RuntimeTickDeps, state: WebGPUState) {
     graphemeBuffer,
     cursor,
   } = render;
-
-  if (!codepoints || !fgBytes) return;
 
   const { useLinearBlending, useLinearCorrection } = resolveBlendFlags(
     alphaBlending,

@@ -1,6 +1,7 @@
 import type { Color, WebGLState } from "../../renderer";
 import type { Font, FontEntry } from "../../fonts";
 import type { GlyphConstraintMeta } from "../atlas-builder";
+import { hasPresentableRenderState } from "./render-frame-guard";
 import type { GlyphQueueItem } from "./render-tick-webgpu.types";
 import type { WebGLTickContext, WebGLTickDeps } from "./render-tick-webgl.types";
 
@@ -63,14 +64,6 @@ export function buildWebGLTickContext(
   const stageTargets = compiledWebGLStages.length > 0 ? ensureWebGLStageTargets(state) : null;
   const hasShaderStages = compiledWebGLStages.length > 0 && !!stageTargets;
 
-  gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.bindFramebuffer(
-    gl.FRAMEBUFFER,
-    hasShaderStages && stageTargets ? stageTargets.sceneFramebuffer : null,
-  );
-  gl.clearColor(defaultBg[0], defaultBg[1], defaultBg[2], defaultBg[3]);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-
   if (fontError) {
     const text = `Font error: ${fontError.message}`;
     if (termDebug) termDebug.textContent = text;
@@ -80,11 +73,18 @@ export function buildWebGLTickContext(
   updateGrid();
 
   const render = getRenderState();
-  if (!render || !fontState.font) {
+  if (!hasPresentableRenderState(render, Boolean(fontState.font))) {
     return null;
   }
 
   deps.lastRenderState = render;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.bindFramebuffer(
+    gl.FRAMEBUFFER,
+    hasShaderStages && stageTargets ? stageTargets.sceneFramebuffer : null,
+  );
+  gl.clearColor(defaultBg[0], defaultBg[1], defaultBg[2], defaultBg[3]);
+  gl.clear(gl.COLOR_BUFFER_BIT);
 
   const {
     rows,
@@ -103,10 +103,6 @@ export function buildWebGLTickContext(
     graphemeBuffer,
     cursor,
   } = render;
-
-  if (!codepoints || !fgBytes) {
-    return null;
-  }
 
   const mergedEmojiSkip = new Uint8Array(codepoints.length);
   const readCellCluster = (

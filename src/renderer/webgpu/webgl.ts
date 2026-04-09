@@ -51,7 +51,11 @@ function createProgram(
 
 /** Initialize a WebGL2 fallback renderer state from a canvas. */
 export function initWebGL(canvas: HTMLCanvasElement): WebGLState | null {
-  const gl = canvas.getContext("webgl2", { antialias: false, alpha: false });
+  const gl = canvas.getContext("webgl2", {
+    antialias: false,
+    alpha: false,
+    preserveDrawingBuffer: true,
+  });
   if (!gl) return null;
 
   const rectProgram = createProgram(gl, RECT_SHADER_GL_VERT, RECT_SHADER_GL_FRAG);

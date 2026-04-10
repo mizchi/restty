@@ -69,6 +69,7 @@ export type BindCanvasEventsOptions = {
 
 export type CreateRuntimeInteractionOptions = {
   attachCanvasEvents: boolean;
+  nativeScrollbar?: boolean;
   touchSelectionMode: "off" | "drag" | "long-press";
   touchSelectionLongPressMs: number;
   touchSelectionMoveThresholdPx: number;

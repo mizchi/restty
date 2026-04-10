@@ -9,6 +9,7 @@ import type {
 import type { ResttyWasm, ResttyWasmExports } from "../../../wasm";
 
 export type CreateScrollbarRuntimeOptions = {
+  nativeScrollbar?: boolean;
   scrollbarState: RuntimeScrollbarState;
   selectionState: RuntimeSelectionState;
   linkState: RuntimeLinkState;
@@ -33,6 +34,7 @@ export type ScrollbarRuntime = {
 
 export function createScrollbarRuntime(options: CreateScrollbarRuntimeOptions): ScrollbarRuntime {
   const {
+    nativeScrollbar,
     scrollbarState,
     selectionState,
     linkState,
@@ -55,7 +57,7 @@ export function createScrollbarRuntime(options: CreateScrollbarRuntimeOptions): 
     window.matchMedia("(any-pointer: coarse)").matches;
   const hasTouchPoints = typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
   const nativeScrollHost =
-    !hasCoarsePointer && !hasTouchPoints && typeof document !== "undefined"
+    nativeScrollbar !== false && !hasCoarsePointer && !hasTouchPoints && typeof document !== "undefined"
       ? createNativeScrollbarHost({
           canvas: getCanvas(),
           getGridState,

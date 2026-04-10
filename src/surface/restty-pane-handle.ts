@@ -27,7 +27,7 @@ type PaneSearchUiHandleOps = {
  */
 export type ResttyPaneApi = {
   id: number;
-  setRenderer: (value: "auto" | "webgpu" | "webgl2") => void;
+  setRenderer: (value: "auto" | "auto-webgl2" | "webgpu" | "webgl2") => void;
   setPaused: (value: boolean) => void;
   togglePause: () => void;
   setFontSize: (value: number) => void;
@@ -84,7 +84,7 @@ export class ResttyPaneHandle implements ResttyPaneApi {
     return this.resolvePane().id;
   }
 
-  setRenderer(value: "auto" | "webgpu" | "webgl2"): void {
+  setRenderer(value: "auto" | "auto-webgl2" | "webgpu" | "webgl2"): void {
     this.resolvePane().app.setRenderer(value);
   }
 

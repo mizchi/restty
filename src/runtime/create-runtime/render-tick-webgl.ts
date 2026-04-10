@@ -7,9 +7,9 @@ import type { WebGLTickDeps } from "./render-tick-webgl.types";
 
 export function tickWebGL(deps: WebGLTickDeps, state: WebGLState) {
   const ctx = buildWebGLTickContext(deps, state);
-  if (!ctx) return;
+  if (!ctx) return false;
 
   populateWebGLSceneData(ctx);
   populateWebGLOverlays(ctx);
-  renderWebGLGlyphPipeline(ctx);
+  return renderWebGLGlyphPipeline(ctx);
 }

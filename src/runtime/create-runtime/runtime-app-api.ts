@@ -12,6 +12,10 @@ import { resolveMaxScrollbackBytes } from "../max-scrollback";
 import type { ResttyApp, ResttyAppCallbacks, ResttyAppSession } from "../types";
 import type { PtyInputRuntime } from "./pty-input-runtime";
 import type { RuntimeInteraction } from "./interaction-runtime";
+import {
+  resolveRendererAttemptOrder,
+  type PreferredRenderer,
+} from "./renderer-attempt-order";
 
 export type RuntimeAppApiSharedState = {
   wasm: ResttyWasm | null;
@@ -28,8 +32,6 @@ export type RuntimeAppApiSharedState = {
 };
 
 type RuntimeBackend = "none" | "webgpu" | "webgl2";
-type PreferredRenderer = "auto" | "webgpu" | "webgl2";
-
 type RuntimeInternalState = {
   paused: boolean;
   backend: RuntimeBackend;
@@ -106,8 +108,8 @@ type CreateRuntimeAppApiOptions = {
   BACKGROUND_RENDER_FPS: number;
   KITTY_FLAG_REPORT_EVENTS: number;
   resizeState: { lastAt: number };
-  tickWebGPU: (state: WebGPUState) => void;
-  tickWebGL: (state: WebGLState) => void;
+  tickWebGPU: (state: WebGPUState) => boolean;
+  tickWebGL: (state: WebGLState) => boolean;
   updateGrid: () => void;
   gridState: { cols: number; rows: number };
   getCanvas: () => HTMLCanvasElement;
@@ -187,6 +189,8 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
     lastFpsTime: performance.now(),
     nextBlinkTime: performance.now() + CURSOR_BLINK_MS,
   };
+  let initPromise: Promise<void> | null = null;
+  let reinitRequested = false;
   const maxScrollbackBytes = resolveMaxScrollbackBytes(options);
 
   function updateFps() {
@@ -229,10 +233,16 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
         // Avoid presenting a cleared frame before the terminal core has a live handle.
         // Leaving needsRender=true retries immediately once startup finishes.
         if (canRenderFrame(nextShared)) {
-          if (internalState.backend === "webgpu" && "device" in state) tickWebGPU(state);
-          if (internalState.backend === "webgl2" && "gl" in state) tickWebGL(state);
-          writeState({ lastRenderTime: now, needsRender: false });
-          updateFps();
+          const presented =
+            internalState.backend === "webgpu" && "device" in state
+              ? tickWebGPU(state)
+              : internalState.backend === "webgl2" && "gl" in state
+                ? tickWebGL(state)
+                : false;
+          if (presented) {
+            writeState({ lastRenderTime: now, needsRender: false });
+            updateFps();
+          }
         }
       }
     }
@@ -536,7 +546,7 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
     }
   }
 
-  async function init() {
+  async function runInit() {
     cancelAnimationFrame(internalState.rafId);
     updateSize();
 
@@ -545,15 +555,19 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
     updateGrid();
     const wasmPromise = initWasmHarness();
 
-    const shared = readState();
-    if (internalState.preferredRenderer !== "webgl2") {
-      if (shared.currentContextType === "webgl2") {
+    const rendererAttemptOrder = resolveRendererAttemptOrder(internalState.preferredRenderer);
+    for (const backend of rendererAttemptOrder) {
+      const shared = readState();
+      if (shared.currentContextType && shared.currentContextType !== backend) {
         replaceCanvas();
       }
-      const canvas = getCanvas();
-      const gpuCore = await session.getWebGPUCore(canvas);
-      const gpuState = gpuCore ? await initWebGPU(canvas, { core: gpuCore }) : null;
-      if (gpuState) {
+
+      if (backend === "webgpu") {
+        const canvas = getCanvas();
+        const gpuCore = await session.getWebGPUCore(canvas);
+        const gpuState = gpuCore ? await initWebGPU(canvas, { core: gpuCore }) : null;
+        if (!gpuState) continue;
+
         internalState.backend = "webgpu";
         writeState({
           activeState: gpuState,
@@ -577,34 +591,28 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
         internalState.rafId = requestAnimationFrame(() => loop(gpuState));
         return;
       }
-    }
 
-    if (internalState.preferredRenderer !== "webgpu") {
-      const nextShared = readState();
-      if (nextShared.currentContextType === "webgpu") {
-        replaceCanvas();
-      }
       const canvas = getCanvas();
       const glState = initWebGL(canvas);
-      if (glState) {
-        internalState.backend = "webgl2";
-        writeState({
-          activeState: glState,
-          currentContextType: "webgl2",
-          needsRender: true,
-        });
-        if (backendEl) backendEl.textContent = "webgl2";
-        callbacks?.onBackend?.("webgl2");
-        log("webgl2 ready");
-        clearWebGPUShaderStages();
-        destroyWebGPUStageTargets();
-        rebuildWebGLShaderStages(glState);
-        setShaderStagesDirty(false);
-        updateGrid();
-        await wasmPromise;
-        internalState.rafId = requestAnimationFrame(() => loop(glState));
-        return;
-      }
+      if (!glState) continue;
+
+      internalState.backend = "webgl2";
+      writeState({
+        activeState: glState,
+        currentContextType: "webgl2",
+        needsRender: true,
+      });
+      if (backendEl) backendEl.textContent = "webgl2";
+      callbacks?.onBackend?.("webgl2");
+      log("webgl2 ready");
+      clearWebGPUShaderStages();
+      destroyWebGPUStageTargets();
+      rebuildWebGLShaderStages(glState);
+      setShaderStagesDirty(false);
+      updateGrid();
+      await wasmPromise;
+      internalState.rafId = requestAnimationFrame(() => loop(glState));
+      return;
     }
 
     internalState.backend = "none";
@@ -613,6 +621,23 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
     log("no GPU backend available");
     writeState({ activeState: null });
     await wasmPromise;
+  }
+
+  function init(): Promise<void> {
+    if (initPromise) return initPromise;
+
+    let pending: Promise<void>;
+    pending = runInit().finally(() => {
+      if (initPromise === pending) {
+        initPromise = null;
+      }
+      if (reinitRequested) {
+        reinitRequested = false;
+        void init();
+      }
+    });
+    initPromise = pending;
+    return pending;
   }
 
   function destroy() {
@@ -646,9 +671,14 @@ export function createRuntimeAppApi(options: CreateRuntimeAppApiOptions): Runtim
     cleanupFns.length = 0;
   }
 
-  function setRenderer(value: "auto" | "webgpu" | "webgl2") {
-    if (value !== "auto" && value !== "webgpu" && value !== "webgl2") return;
+  function setRenderer(value: "auto" | "auto-webgl2" | "webgpu" | "webgl2") {
+    if (value !== "auto" && value !== "auto-webgl2" && value !== "webgpu" && value !== "webgl2")
+      return;
     internalState.preferredRenderer = value;
+    if (initPromise) {
+      reinitRequested = true;
+      return;
+    }
     void init();
   }
 

@@ -2,6 +2,7 @@ import type { Color, WebGLState } from "../../renderer";
 import type { Font, FontEntry } from "../../fonts";
 import type { GlyphConstraintMeta } from "../atlas-builder";
 import { hasPresentableRenderState } from "./render-frame-guard";
+import { resolveRenderPresentMode } from "./render-present-mode";
 import type { GlyphQueueItem } from "./render-tick-webgpu.types";
 import type { WebGLTickContext, WebGLTickDeps } from "./render-tick-webgl.types";
 
@@ -17,6 +18,7 @@ export function buildWebGLTickContext(
     setShaderStagesDirty,
     getCompiledWebGLShaderStages,
     ensureWebGLStageTargets,
+    ensureWebGLPresentStage,
     canvas,
     defaultBg,
     fontError,
@@ -61,8 +63,22 @@ export function buildWebGLTickContext(
     setShaderStagesDirty(false);
   }
   const compiledWebGLStages = getCompiledWebGLShaderStages();
-  const stageTargets = compiledWebGLStages.length > 0 ? ensureWebGLStageTargets(state) : null;
-  const hasShaderStages = compiledWebGLStages.length > 0 && !!stageTargets;
+  const renderPresentMode = resolveRenderPresentMode({
+    hasCustomStages: compiledWebGLStages.length > 0,
+    atomicPresent: true,
+  });
+  const stageTargets =
+    renderPresentMode === "direct" ? null : ensureWebGLStageTargets(state);
+  const effectiveWebGLStages =
+    renderPresentMode === "offscreen-stage"
+      ? compiledWebGLStages
+      : renderPresentMode === "offscreen-copy"
+        ? (() => {
+            const presentStage = ensureWebGLPresentStage(state);
+            return presentStage ? [presentStage] : [];
+          })()
+        : [];
+  const hasShaderStages = effectiveWebGLStages.length > 0 && !!stageTargets;
 
   if (fontError) {
     const text = `Font error: ${fontError.message}`;
@@ -78,13 +94,6 @@ export function buildWebGLTickContext(
   }
 
   deps.lastRenderState = render;
-  gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.bindFramebuffer(
-    gl.FRAMEBUFFER,
-    hasShaderStages && stageTargets ? stageTargets.sceneFramebuffer : null,
-  );
-  gl.clearColor(defaultBg[0], defaultBg[1], defaultBg[2], defaultBg[3]);
-  gl.clear(gl.COLOR_BUFFER_BIT);
 
   const {
     rows,
@@ -426,6 +435,7 @@ export function buildWebGLTickContext(
     cursorStyle,
     cursorCell,
     cursorImeAnchor,
+    clearColor: defaultBg,
     cellW,
     cellH,
     fontSizePx,
@@ -460,7 +470,8 @@ export function buildWebGLTickContext(
     getGlyphSet,
     noteGlyphMeta,
     getGlyphData,
-    compiledWebGLStages,
+    renderPresentMode,
+    compiledWebGLStages: effectiveWebGLStages,
     stageTargets,
     hasShaderStages,
   };

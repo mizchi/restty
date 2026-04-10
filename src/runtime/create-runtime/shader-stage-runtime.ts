@@ -13,6 +13,10 @@ import {
   sortShaderStages,
 } from "../shader-stages";
 import {
+  PASSTHROUGH_STAGE_SHADER_GL,
+  PASSTHROUGH_STAGE_SHADER_WGSL,
+} from "../render-stage-shaders";
+import {
   compileShaderStageProgram,
   compileShaderStagePipelineWebGPU,
   createWebGLStageTargets,
@@ -21,6 +25,16 @@ import {
 } from "../render-stage-runtime";
 
 type ShaderBackend = "webgpu" | "webgl2";
+
+const BUILTIN_PRESENT_STAGE: ResttyShaderStage = {
+  id: "__restty_present_copy__",
+  enabled: true,
+  backend: "both",
+  shader: {
+    wgsl: PASSTHROUGH_STAGE_SHADER_WGSL,
+    glsl: PASSTHROUGH_STAGE_SHADER_GL,
+  },
+};
 
 export type CreateShaderStageRuntimeOptions = {
   appendLog: (line: string) => void;
@@ -42,6 +56,8 @@ export type ShaderStageRuntime = {
   destroyWebGLStageTargets: (state?: WebGLState | null) => void;
   ensureWebGPUStageTargets: (state: WebGPUState) => WebGPUStageTargets | null;
   ensureWebGLStageTargets: (state: WebGLState) => WebGLStageTargets | null;
+  ensureWebGPUPresentStage: (state: WebGPUState) => CompiledWebGPUShaderStage | null;
+  ensureWebGLPresentStage: (state: WebGLState) => CompiledWebGLShaderStage | null;
   rebuildWebGPUShaderStages: (state: WebGPUState) => void;
   rebuildWebGLShaderStages: (state: WebGLState) => void;
 };
@@ -52,6 +68,8 @@ export function createShaderStageRuntime(
   let shaderStages: ResttyShaderStage[] = [];
   let compiledWebGPUShaderStages: CompiledWebGPUShaderStage[] = [];
   let compiledWebGLShaderStages: CompiledWebGLShaderStage[] = [];
+  let compiledWebGPUPresentStage: CompiledWebGPUShaderStage | null = null;
+  let compiledWebGLPresentStage: CompiledWebGLShaderStage | null = null;
   let webgpuStageTargets: WebGPUStageTargets | null = null;
   let webglStageTargets: WebGLStageTargets | null = null;
   let shaderStagesDirty = true;
@@ -102,18 +120,31 @@ export function createShaderStageRuntime(
       }
     }
     compiledWebGPUShaderStages = [];
+    if (compiledWebGPUPresentStage) {
+      try {
+        compiledWebGPUPresentStage.uniformBuffer.destroy();
+      } catch {
+        // Ignore GPU cleanup errors during backend switches.
+      }
+      compiledWebGPUPresentStage = null;
+    }
   }
 
   function clearWebGLShaderStages(state?: WebGLState | null): void {
     const gl = state?.gl ?? options.getActiveWebGLState()?.gl ?? null;
     if (!gl) {
       compiledWebGLShaderStages = [];
+      compiledWebGLPresentStage = null;
       return;
     }
     for (let i = 0; i < compiledWebGLShaderStages.length; i += 1) {
       gl.deleteProgram(compiledWebGLShaderStages[i].program);
     }
     compiledWebGLShaderStages = [];
+    if (compiledWebGLPresentStage) {
+      gl.deleteProgram(compiledWebGLPresentStage.program);
+      compiledWebGLPresentStage = null;
+    }
   }
 
   function destroyWebGPUStageTargets(): void {
@@ -172,7 +203,37 @@ export function createShaderStageRuntime(
     if (compiledWebGPUShaderStages.length) {
       rebuildWebGPUStageBindGroups(state.device, compiledWebGPUShaderStages, webgpuStageTargets);
     }
+    if (compiledWebGPUPresentStage) {
+      rebuildWebGPUStageBindGroups(state.device, [compiledWebGPUPresentStage], webgpuStageTargets);
+    }
     return webgpuStageTargets;
+  }
+
+  function ensureWebGPUPresentStage(state: WebGPUState): CompiledWebGPUShaderStage | null {
+    if (!compiledWebGPUPresentStage) {
+      compiledWebGPUPresentStage = compileShaderStagePipelineWebGPU({
+        device: state.device,
+        format: state.format,
+        stage: BUILTIN_PRESENT_STAGE,
+        reportError: reportShaderStageError,
+      });
+    }
+    if (!compiledWebGPUPresentStage) return null;
+    if (webgpuStageTargets) {
+      rebuildWebGPUStageBindGroups(state.device, [compiledWebGPUPresentStage], webgpuStageTargets);
+    }
+    return compiledWebGPUPresentStage;
+  }
+
+  function ensureWebGLPresentStage(state: WebGLState): CompiledWebGLShaderStage | null {
+    if (!compiledWebGLPresentStage) {
+      compiledWebGLPresentStage = compileShaderStageProgram({
+        gl: state.gl,
+        stage: BUILTIN_PRESENT_STAGE,
+        reportError: reportShaderStageError,
+      });
+    }
+    return compiledWebGLPresentStage;
   }
 
   function rebuildWebGPUShaderStages(state: WebGPUState): void {
@@ -242,6 +303,8 @@ export function createShaderStageRuntime(
     destroyWebGLStageTargets,
     ensureWebGPUStageTargets,
     ensureWebGLStageTargets,
+    ensureWebGPUPresentStage,
+    ensureWebGLPresentStage,
     rebuildWebGPUShaderStages,
     rebuildWebGLShaderStages,
   };

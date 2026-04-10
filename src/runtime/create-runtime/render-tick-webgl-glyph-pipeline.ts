@@ -1,3 +1,4 @@
+import { shouldDeferIncompleteGlyphFrame } from "./render-frame-guard";
 import type { GlyphQueueItem } from "./render-tick-webgpu.types";
 import type { WebGLTickContext } from "./render-tick-webgl.types";
 
@@ -31,6 +32,7 @@ export function renderWebGLGlyphPipeline(ctx: WebGLTickContext) {
     useLinearBlending,
     useLinearCorrection,
     compiledWebGLStages,
+    renderPresentMode,
     stageTargets,
     hasShaderStages,
   } = ctx;
@@ -356,8 +358,30 @@ export function renderWebGLGlyphPipeline(ctx: WebGLTickContext) {
   emitGlyphs(glyphQueueByFont, glyphDataByFont);
   emitGlyphs(overlayGlyphQueueByFont, overlayGlyphDataByFont);
 
+  const queuedGlyphItems =
+    Array.from(glyphQueueByFont.values()).reduce((count, queue) => count + queue.length, 0) +
+    Array.from(overlayGlyphQueueByFont.values()).reduce((count, queue) => count + queue.length, 0);
+  const emittedGlyphInstances =
+    Array.from(glyphDataByFont.entries()).reduce((count, [fontIndex, data]) => {
+      return count + (state.glyphAtlases.get(fontIndex) ? data.length / GLYPH_INSTANCE_FLOATS : 0);
+    }, 0) +
+    Array.from(overlayGlyphDataByFont.entries()).reduce((count, [fontIndex, data]) => {
+      return count + (state.glyphAtlases.get(fontIndex) ? data.length / GLYPH_INSTANCE_FLOATS : 0);
+    }, 0);
+  if (shouldDeferIncompleteGlyphFrame({ queuedGlyphItems, emittedGlyphInstances })) {
+    return false;
+  }
+
   const kittyPlacements = wasm && wasmHandle ? wasm.getKittyPlacements(wasmHandle) : [];
   const kittyPlan = collectKittyDrawPlan(kittyPlacements, cellW, cellH);
+
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.bindFramebuffer(
+    gl.FRAMEBUFFER,
+    renderPresentMode === "direct" || !stageTargets ? null : stageTargets.sceneFramebuffer,
+  );
+  gl.clearColor(ctx.clearColor[0], ctx.clearColor[1], ctx.clearColor[2], ctx.clearColor[3]);
+  gl.clear(gl.COLOR_BUFFER_BIT);
 
   const drawRects = (data: number[]) => {
     if (!data.length) return;
@@ -474,7 +498,7 @@ export function renderWebGLGlyphPipeline(ctx: WebGLTickContext) {
     drawGlyphs(fontIndex, glyphData);
   }
 
-  if (hasShaderStages && stageTargets) {
+  if (renderPresentMode !== "direct" && hasShaderStages && stageTargets) {
     gl.disable(gl.BLEND);
     gl.bindVertexArray(stageTargets.quadVao);
     const nowSec = performance.now() * 0.001;
@@ -522,4 +546,6 @@ export function renderWebGLGlyphPipeline(ctx: WebGLTickContext) {
   } else {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
+
+  return true;
 }

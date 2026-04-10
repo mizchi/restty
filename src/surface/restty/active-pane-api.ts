@@ -14,7 +14,7 @@ export abstract class ResttyActivePaneApi {
     return this.requireActivePaneHandle().isPtyConnected();
   }
 
-  setRenderer(value: "auto" | "webgpu" | "webgl2"): void {
+  setRenderer(value: "auto" | "auto-webgl2" | "webgpu" | "webgl2"): void {
     this.requireActivePaneHandle().setRenderer(value);
   }
 

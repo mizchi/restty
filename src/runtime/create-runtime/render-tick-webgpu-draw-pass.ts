@@ -1,4 +1,5 @@
 import { emitWebGPUQueuedGlyphs } from "./render-tick-webgpu-emit-glyphs";
+import { shouldDeferIncompleteGlyphFrame } from "./render-frame-guard";
 import type { DrawWebGPUFrameParams } from "./render-tick-webgpu.types";
 
 export function drawWebGPUFrame(params: DrawWebGPUFrameParams) {
@@ -22,6 +23,7 @@ export function drawWebGPUFrame(params: DrawWebGPUFrameParams) {
     useLinearCorrection,
     clearColor,
     hasShaderStages,
+    renderPresentMode,
     stageTargets,
     compiledWebGPUStages,
   } = params;
@@ -158,7 +160,7 @@ export function drawWebGPUFrame(params: DrawWebGPUFrameParams) {
   device.queue.writeBuffer(state.uniformBuffer, 0, webgpuUniforms);
 
   const presentView = context.getCurrentTexture().createView();
-  const mainView = hasShaderStages && stageTargets ? stageTargets.sceneView : presentView;
+  const mainView = renderPresentMode === "direct" || !stageTargets ? presentView : stageTargets.sceneView;
   const encoder = device.createCommandEncoder();
   const pass = encoder.beginRenderPass({
     colorAttachments: [
@@ -284,6 +286,19 @@ export function drawWebGPUFrame(params: DrawWebGPUFrameParams) {
     });
   }
 
+  const queuedGlyphItems =
+    Array.from(frame.glyphQueueByFont.values()).reduce((count, queue) => count + queue.length, 0) +
+    Array.from(frame.overlayGlyphQueueByFont.values()).reduce(
+      (count, queue) => count + queue.length,
+      0,
+    );
+  const emittedGlyphInstances =
+    glyphMainBatches.reduce((count, batch) => count + batch.instances, 0) +
+    glyphOverlayBatches.reduce((count, batch) => count + batch.instances, 0);
+  if (shouldDeferIncompleteGlyphFrame({ queuedGlyphItems, emittedGlyphInstances })) {
+    return false;
+  }
+
   const kittyPlacements = wasm && wasmHandle ? wasm.getKittyPlacements(wasmHandle) : [];
   const kittyPlan = collectKittyDrawPlan(kittyPlacements, cellW, cellH);
   const kittyUnderlayBatches: GlyphBatch[] = [];
@@ -393,7 +408,7 @@ export function drawWebGPUFrame(params: DrawWebGPUFrameParams) {
 
   pass.end();
 
-  if (hasShaderStages && stageTargets) {
+  if (renderPresentMode !== "direct" && hasShaderStages && stageTargets) {
     let source = "scene";
     const nowSec = performance.now() * 0.001;
     for (let i = 0; i < compiledWebGPUStages.length; i += 1) {
@@ -448,4 +463,5 @@ export function drawWebGPUFrame(params: DrawWebGPUFrameParams) {
   }
 
   device.queue.submit([encoder.finish()]);
+  return true;
 }

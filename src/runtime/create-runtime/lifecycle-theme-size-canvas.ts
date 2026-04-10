@@ -34,8 +34,7 @@ export function createLifecycleCanvasHandlers(deps: LifecycleThemeSizeDeps) {
 
   function replaceCanvas(): void {
     const canvas = deps.getCanvas();
-    const parent = canvas.parentElement;
-    if (!parent) return;
+    if (!canvas.parentElement) return;
 
     saveCanvasState();
     for (const cleanup of deps.cleanupCanvasFns) cleanup();
@@ -54,7 +53,9 @@ export function createLifecycleCanvasHandlers(deps: LifecycleThemeSizeDeps) {
     const newCanvas = document.createElement("canvas");
     newCanvas.id = canvas.id;
     newCanvas.className = canvas.className;
-    parent.replaceChild(newCanvas, canvas);
+    const currentParent = canvas.parentElement;
+    if (!currentParent) return;
+    currentParent.replaceChild(newCanvas, canvas);
     deps.setCanvas(newCanvas);
     deps.setIsFocused(
       typeof document !== "undefined" ? document.activeElement === deps.getCanvas() : true,

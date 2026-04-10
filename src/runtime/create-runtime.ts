@@ -208,6 +208,7 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
   const attachWindowEvents = options.attachWindowEvents ?? true;
   const attachCanvasEvents = options.attachCanvasEvents ?? true;
   const autoResize = options.autoResize ?? true;
+  const nativeScrollbar = options.nativeScrollbar ?? true;
   const debugExpose = options.debugExpose ?? false;
   const touchSelectionMode = normalizeTouchSelectionMode(options.touchSelectionMode);
   const touchSelectionLongPressMs = clampFiniteNumber(
@@ -399,6 +400,8 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     destroyWebGLStageTargets,
     ensureWebGPUStageTargets,
     ensureWebGLStageTargets,
+    ensureWebGPUPresentStage,
+    ensureWebGLPresentStage,
     rebuildWebGPUShaderStages,
     rebuildWebGLShaderStages,
   } = shaderStageRuntime;
@@ -449,6 +452,7 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
   let lastRenderState: RenderState | null = null;
   const runtimeInteraction = createRuntimeInteraction({
     attachCanvasEvents,
+    nativeScrollbar,
     touchSelectionMode,
     touchSelectionLongPressMs,
     touchSelectionMoveThresholdPx,
@@ -1011,6 +1015,8 @@ export function createResttyApp(options: ResttyAppOptions): ResttyApp {
     getCompiledWebGLShaderStages,
     ensureWebGPUStageTargets,
     ensureWebGLStageTargets,
+    ensureWebGPUPresentStage,
+    ensureWebGLPresentStage,
     get fontError() {
       return fontError;
     },

@@ -1,5 +1,17 @@
 export const STAGE_UNIFORM_BUFFER_FLOATS = 12;
 
+export const PASSTHROUGH_STAGE_SHADER_GL = `
+vec4 resttyStage(vec4 color, vec2 uv, float time, vec4 params0, vec4 params1) {
+  return color;
+}
+`;
+
+export const PASSTHROUGH_STAGE_SHADER_WGSL = `
+fn resttyStage(color: vec4f, uv: vec2f, time: f32, params0: vec4f, params1: vec4f) -> vec4f {
+  return color;
+}
+`;
+
 export const FULLSCREEN_STAGE_VERTEX_SHADER_GL = `#version 300 es
 precision highp float;
 layout(location = 0) in vec2 a_quad;

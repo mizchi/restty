@@ -56,7 +56,7 @@ function ensureNativeScrollbarStyles() {
   overflow: hidden;
 }
 
-.restty-native-scroll-canvas {
+.restty-native-scroll-viewport {
   position: sticky;
   top: 0;
   left: 0;
@@ -66,6 +66,12 @@ function ensureNativeScrollbarStyles() {
   z-index: 0;
   flex: none;
   will-change: transform;
+}
+
+.restty-native-scroll-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .restty-native-scroll-spacer {
@@ -126,6 +132,8 @@ export function createNativeScrollbarHost(
   root.className = "restty-native-scroll-root";
   const host = document.createElement("div");
   host.className = "restty-native-scroll-host";
+  const viewport = document.createElement("div");
+  viewport.className = "restty-native-scroll-viewport";
   const spacer = document.createElement("div");
   spacer.className = "restty-native-scroll-spacer";
   const chrome = document.createElement("div");
@@ -136,7 +144,8 @@ export function createNativeScrollbarHost(
 
   parent.insertBefore(root, canvas);
   root.append(host, chrome);
-  host.append(canvas, spacer);
+  host.append(viewport, spacer);
+  viewport.append(canvas);
 
   canvas.classList.add("restty-native-scroll-canvas");
 
@@ -160,12 +169,12 @@ export function createNativeScrollbarHost(
 
   const applyCanvasResidual = (offset: number) => {
     if (!currentDenom || currentScrollRangePx <= 0) {
-      canvas.style.transform = "translate3d(0, 0, 0)";
+      viewport.style.transform = "translate3d(0, 0, 0)";
       return;
     }
     const logicalScrollTop = (offset / currentDenom) * currentScrollRangePx;
     const residual = host.scrollTop - logicalScrollTop;
-    canvas.style.transform = `translate3d(0, ${-residual}px, 0)`;
+    viewport.style.transform = `translate3d(0, ${-residual}px, 0)`;
   };
 
   const scheduleThumbFade = () => {
@@ -288,7 +297,7 @@ export function createNativeScrollbarHost(
         currentScrollRangePx = 0;
         spacer.style.height = "0px";
         chrome.style.display = "none";
-        canvas.style.transform = "translate3d(0, 0, 0)";
+        viewport.style.transform = "translate3d(0, 0, 0)";
         if (host.scrollTop !== 0) {
           ignoreNextScroll = true;
           host.scrollTop = 0;
@@ -347,7 +356,6 @@ export function createNativeScrollbarHost(
       const currentCanvas = root.querySelector("canvas");
       if (currentCanvas && root.parentElement) {
         currentCanvas.classList.remove("restty-native-scroll-canvas");
-        currentCanvas.style.transform = "";
         root.parentElement.replaceChild(currentCanvas, root);
       } else {
         root.remove();

@@ -3,6 +3,7 @@ import { collectWebGPUCellPass } from "./render-tick-webgpu-cell-pass";
 import { drawWebGPUFrame } from "./render-tick-webgpu-draw-pass";
 import { augmentWebGPUFrameWithOverlaysAndAtlas } from "./render-tick-webgpu-overlays-atlas";
 import { hasPresentableRenderState } from "./render-frame-guard";
+import { resolveRenderPresentMode } from "./render-present-mode";
 import type { RuntimeTickDeps } from "./render-tick-webgpu.types";
 
 export function tickWebGPU(deps: RuntimeTickDeps, state: WebGPUState) {
@@ -12,6 +13,7 @@ export function tickWebGPU(deps: RuntimeTickDeps, state: WebGPUState) {
     setShaderStagesDirty,
     getCompiledWebGPUShaderStages,
     ensureWebGPUStageTargets,
+    ensureWebGPUPresentStage,
     fontError,
     termDebug,
     reportDebugText,
@@ -47,9 +49,22 @@ export function tickWebGPU(deps: RuntimeTickDeps, state: WebGPUState) {
     setShaderStagesDirty(false);
   }
   const compiledWebGPUStages = getCompiledWebGPUShaderStages();
-  const shaderStageCount = compiledWebGPUStages.length;
-  const stageTargets = shaderStageCount > 0 ? ensureWebGPUStageTargets(state) : null;
-  const hasShaderStages = shaderStageCount > 0 && !!stageTargets;
+  const renderPresentMode = resolveRenderPresentMode({
+    hasCustomStages: compiledWebGPUStages.length > 0,
+    atomicPresent: true,
+  });
+  const stageTargets =
+    renderPresentMode === "direct" ? null : ensureWebGPUStageTargets(state);
+  const finalWebGPUStages =
+    renderPresentMode === "offscreen-stage"
+      ? compiledWebGPUStages
+      : renderPresentMode === "offscreen-copy"
+        ? (() => {
+            const presentStage = ensureWebGPUPresentStage(state);
+            return presentStage ? [presentStage] : [];
+          })()
+        : [];
+  const hasShaderStages = finalWebGPUStages.length > 0 && !!stageTargets;
 
   if (fontError) {
     const text = `Font error: ${fontError.message}`;
@@ -61,28 +76,7 @@ export function tickWebGPU(deps: RuntimeTickDeps, state: WebGPUState) {
 
   const render = getRenderState();
   if (!hasPresentableRenderState(render, Boolean(fontState.font))) {
-    // During live resize, render state can be momentarily unavailable.
-    // Keep the last presented frame instead of flashing a cleared frame.
-    if (deps.lastRenderState) {
-      return;
-    }
-    const { useLinearBlending } = resolveBlendFlags(alphaBlending, "webgpu", state);
-    const clearColor = useLinearBlending ? srgbToLinearColor(defaultBg) : defaultBg;
-    const encoder = device.createCommandEncoder();
-    const presentView = context.getCurrentTexture().createView();
-    const pass = encoder.beginRenderPass({
-      colorAttachments: [
-        {
-          view: presentView,
-          clearValue: { r: clearColor[0], g: clearColor[1], b: clearColor[2], a: clearColor[3] },
-          loadOp: "clear",
-          storeOp: "store",
-        },
-      ],
-    });
-    pass.end();
-    device.queue.submit([encoder.finish()]);
-    return;
+    return false;
   }
 
   deps.lastRenderState = render;
@@ -262,7 +256,7 @@ export function tickWebGPU(deps: RuntimeTickDeps, state: WebGPUState) {
     fontSizePx,
   });
 
-  drawWebGPUFrame({
+  return drawWebGPUFrame({
     deps,
     state,
     frame,
@@ -283,6 +277,7 @@ export function tickWebGPU(deps: RuntimeTickDeps, state: WebGPUState) {
     clearColor,
     hasShaderStages,
     stageTargets,
-    compiledWebGPUStages,
+    compiledWebGPUStages: finalWebGPUStages,
+    renderPresentMode,
   });
 }

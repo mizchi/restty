@@ -241,7 +241,7 @@ export type ResttyAppOptions = {
   /** Callbacks for state-change notifications. */
   callbacks?: ResttyAppCallbacks;
   /** Renderer backend preference (default "auto"). */
-  renderer?: "auto" | "webgpu" | "webgl2";
+  renderer?: "auto" | "auto-webgl2" | "webgpu" | "webgl2";
   /** Font size in CSS pixels. */
   fontSize?: number;
   /** Enable programming ligature shaping across adjacent operator cells (default true). */
@@ -284,6 +284,8 @@ export type ResttyAppOptions = {
   attachWindowEvents?: boolean;
   /** Attach pointer/keyboard listeners to the canvas. */
   attachCanvasEvents?: boolean;
+  /** Enable the DOM-based native scrollbar host on desktop (default true). */
+  nativeScrollbar?: boolean;
   /**
    * Touch selection behavior on pointerType=touch:
    * - drag: immediate drag-selection (legacy behavior)
@@ -338,7 +340,7 @@ export type ResttyApp = {
   /** Tear down all resources and event listeners. */
   destroy: () => void;
   /** Switch the renderer backend at runtime. */
-  setRenderer: (value: "auto" | "webgpu" | "webgl2") => void;
+  setRenderer: (value: "auto" | "auto-webgl2" | "webgpu" | "webgl2") => void;
   /** Pause or resume rendering. */
   setPaused: (value: boolean) => void;
   /** Toggle the rendering pause state. */

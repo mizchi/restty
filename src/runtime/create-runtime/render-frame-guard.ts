@@ -14,3 +14,10 @@ export function hasPresentableRenderState(
   if (render.fgBytes.length < render.cellCount * 4) return false;
   return true;
 }
+
+export function shouldDeferIncompleteGlyphFrame(params: {
+  queuedGlyphItems: number;
+  emittedGlyphInstances: number;
+}): boolean {
+  return params.queuedGlyphItems > 0 && params.emittedGlyphInstances === 0;
+}

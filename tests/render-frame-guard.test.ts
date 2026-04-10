@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { hasPresentableRenderState } from "../src/runtime/create-runtime/render-frame-guard";
+import {
+  hasPresentableRenderState,
+  shouldDeferIncompleteGlyphFrame,
+} from "../src/runtime/create-runtime/render-frame-guard";
 import type { RenderState } from "../src/wasm";
 
 function createRenderState(overrides: Partial<RenderState> = {}): RenderState {
@@ -49,5 +52,26 @@ test("rejects incomplete typed-array snapshots", () => {
   ).toBe(false);
   expect(
     hasPresentableRenderState(createRenderState({ fgBytes: new Uint8Array(0) }), true),
+  ).toBe(false);
+});
+
+test("defers frames when glyph work exists but nothing can be emitted", () => {
+  expect(
+    shouldDeferIncompleteGlyphFrame({
+      queuedGlyphItems: 3,
+      emittedGlyphInstances: 0,
+    }),
+  ).toBe(true);
+  expect(
+    shouldDeferIncompleteGlyphFrame({
+      queuedGlyphItems: 0,
+      emittedGlyphInstances: 0,
+    }),
+  ).toBe(false);
+  expect(
+    shouldDeferIncompleteGlyphFrame({
+      queuedGlyphItems: 3,
+      emittedGlyphInstances: 2,
+    }),
   ).toBe(false);
 });

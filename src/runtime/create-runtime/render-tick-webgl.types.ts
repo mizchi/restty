@@ -8,6 +8,7 @@ import type {
   GlyphConstraintMeta,
 } from "../atlas-builder";
 import type { AlphaBlendingMode } from "./blend-utils";
+import type { RenderPresentMode } from "./render-present-mode";
 import type {
   CursorPosition,
   GlyphQueueItem,
@@ -24,6 +25,7 @@ export type WebGLTickDeps = SharedTickDeps & {
   setShaderStagesDirty: (value: boolean) => void;
   getCompiledWebGLShaderStages: () => CompiledWebGLShaderStage[];
   ensureWebGLStageTargets: (state: WebGLState) => WebGLStageTargets | null;
+  ensureWebGLPresentStage: (state: WebGLState) => CompiledWebGLShaderStage | null;
   fontError: Error | null;
   termDebug: HTMLElement | null;
   reportDebugText: (text: string) => void;
@@ -112,6 +114,7 @@ export type WebGLTickContext = {
   cursorStyle: number | null;
   cursorCell: WebGLCursorCell | null;
   cursorImeAnchor: { row: number; col: number } | null;
+  clearColor: Color;
   cellW: number;
   cellH: number;
   fontSizePx: number;
@@ -146,6 +149,7 @@ export type WebGLTickContext = {
   getGlyphSet: (fontIndex: number) => Set<number>;
   noteGlyphMeta: (fontIndex: number, glyphId: number, cp: number, constraintWidth: number) => void;
   getGlyphData: (map: Map<number, number[]>, fontIndex: number) => number[];
+  renderPresentMode: RenderPresentMode;
   compiledWebGLStages: CompiledWebGLShaderStage[];
   stageTargets: WebGLStageTargets | null;
   hasShaderStages: boolean;

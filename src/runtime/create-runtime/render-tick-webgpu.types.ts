@@ -12,6 +12,7 @@ import type {
   SearchViewportMatch,
 } from "../../wasm";
 import type { KittyDrawPlan, KittyDrawSlice } from "./kitty-render-runtime";
+import type { RenderPresentMode } from "./render-present-mode";
 import type { ResttyFontHintTarget } from "../types";
 
 export type CursorPosition = {
@@ -336,6 +337,7 @@ export type RuntimeTickDeps = SharedTickDeps & {
   setShaderStagesDirty: (value: boolean) => void;
   getCompiledWebGPUShaderStages: () => CompiledWebGPUShaderStage[];
   ensureWebGPUStageTargets: (state: WebGPUState) => WebGPUStageTargets | null;
+  ensureWebGPUPresentStage: (state: WebGPUState) => CompiledWebGPUShaderStage | null;
   fontError: Error | null;
   termDebug: HTMLElement | null;
   reportDebugText: (text: string) => void;
@@ -459,6 +461,7 @@ export type DrawWebGPUFrameParams = {
   useLinearCorrection: boolean;
   clearColor: Color;
   hasShaderStages: boolean;
+  renderPresentMode: RenderPresentMode;
   stageTargets: WebGPUStageTargets | null;
   compiledWebGPUStages: CompiledWebGPUShaderStage[];
 };

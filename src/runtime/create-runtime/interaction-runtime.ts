@@ -31,6 +31,7 @@ export function createRuntimeInteraction(
 ): RuntimeInteraction {
   const {
     attachCanvasEvents,
+    nativeScrollbar,
     touchSelectionMode,
     touchSelectionLongPressMs,
     touchSelectionMoveThresholdPx,
@@ -147,6 +148,7 @@ export function createRuntimeInteraction(
   };
 
   const scrollbarRuntime = createScrollbarRuntime({
+    nativeScrollbar,
     scrollbarState,
     selectionState,
     linkState,

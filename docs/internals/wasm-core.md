@@ -10,6 +10,12 @@ The current wrapper (`wasm/src/restty.zig`) exports more than the original
 prototype baseline: lifecycle, render buffers, scrollback helpers, palette
 updates, output draining, link metadata, and kitty image placement buffers.
 
+> **Submodule note:** `reference/ghostty` is pinned to the `wasm-kitty`
+> branch of [`mizchi/ghostty`](https://github.com/mizchi/ghostty), a fork
+> of `ghostty-org/ghostty` that re-enables the Kitty graphics protocol on
+> `wasm32-freestanding`. The rebase workflow is documented in
+> [`../development/ghostty-sync.md`](../development/ghostty-sync.md).
+
 ## Build Strategy
 - Use Ghostty's build system to compile the `ghostty-vt` Zig module to WASM.
 - Create our own Zig entry module that:

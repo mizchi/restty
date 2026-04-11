@@ -17,6 +17,10 @@ coverage/
 # Local tooling
 .crush/
 
+# Local tooling caches
+.cache/
+wasm/zig-pkg/
+
 # Zig build cache/output
 wasm/.zig-cache/
 wasm/zig-cache/
